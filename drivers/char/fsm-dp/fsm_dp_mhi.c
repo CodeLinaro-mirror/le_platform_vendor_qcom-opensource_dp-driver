@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -73,7 +73,7 @@ static int __mhi_rx_replenish(
 	struct fsm_dp_mempool *mempool)
 {
 	struct mhi_device *mhi_dev = mhi->mhi_dev;
-	int nr = mhi_get_no_free_descriptors(mhi_dev, DMA_FROM_DEVICE);
+	int nr = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 	void *buf;
 	int ret, i, to_xfer;
 	bool outofbuf;
@@ -98,39 +98,35 @@ static int __mhi_rx_replenish(
 			if (buf !=  mempool->dummy_buf)
 				fsm_dp_set_buf_state(buf,
 					FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
-			mhi->ul_buf_array[i] = buf;
-			mhi->ul_size_array[i] = mempool->mem.buf_sz;
+			mhi->ul_buf_array[i].buf = buf;
+			mhi->ul_buf_array[i].len = mempool->mem.buf_sz;
 			mhi->ul_flag_array[i] = MHI_EOT;
 			if (mempool->mem.loc.dma_mapped &&
 					buf != mempool->dummy_buf) {
 
-				mhi->ul_dma_addr_array[i] =
+				mhi->ul_buf_array[i].dma_addr =
 					mempool->mem.loc.cluster_dma_addr
 							[cluster] + c_offset;
-				/*
-				 * set flag to indicate buf is
-				 * dma handle instead of
-				 * kernal virtual addr.
-				 */
-				mhi->ul_flag_array[i] |= MHI_FLAGS_DMA_ADDR;
+				mhi->ul_buf_array[i].streaming_dma = true;
+			} else {
+				mhi->ul_buf_array[i].dma_addr = 0;
+				mhi->ul_buf_array[i].streaming_dma = false;
 			}
 		}
-		ret = mhi_queue_n_transfer(mhi_dev,
-						DMA_FROM_DEVICE,
-						mhi->ul_buf_array,
-						mhi->ul_size_array,
-						mhi->ul_flag_array,
-						mhi->ul_dma_addr_array,
-						to_xfer);
+		ret = mhi_queue_n_dma(mhi_dev,
+				      DMA_FROM_DEVICE,
+				      mhi->ul_buf_array,
+				      mhi->ul_flag_array,
+				      to_xfer);
 		if (ret) {
 			for (i = 0; i < to_xfer; i++) {
-				if (mhi->ul_buf_array[i] !=
+				if (mhi->ul_buf_array[i].buf !=
 					mempool->dummy_buf) {
 					fsm_dp_set_buf_state(
-						mhi->ul_buf_array[i],
+						mhi->ul_buf_array[i].buf,
 						FSM_DP_BUF_STATE_KERNEL_FREE);
 					fsm_dp_mempool_put_buf(mempool,
-						mhi->ul_buf_array[i]);
+						mhi->ul_buf_array[i].buf);
 				}
 			}
 			mhi->stats.rx_replenish_err++;
@@ -168,7 +164,7 @@ static void __mhi_ul_xfer_cb(
 	struct mhi_device *mhi_dev,
 	struct mhi_result *result)
 {
-	struct fsm_dp_drv *drv = mhi_device_get_devdata(mhi_dev);
+	struct fsm_dp_drv *drv = dev_get_drvdata(&mhi_dev->dev);
 	struct fsm_dp_mhi *mhi = &drv->mhi;
 	void *addr = result->buf_addr;
 	struct fsm_dp_mempool *mempool;
@@ -177,13 +173,6 @@ static void __mhi_ul_xfer_cb(
 	FSM_DP_DEBUG("%s: ul_xfer_result addr=%p dir=%u bytes=%lu status=%d\n",
 		     __func__, result->buf_addr, result->dir,
 		     result->bytes_xferd, result->transaction_status);
-
-
-
-	if (result->buf_indirect) {
-		__mhi_ul_skb_xfer_cmplt((struct sk_buff *) addr);
-		return;
-	}
 
 	fsm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
 	mhi->stats.tx_acked++;
@@ -244,7 +233,7 @@ static void __mhi_dl_xfer_cb(
 	struct mhi_device *mhi_dev,
 	struct mhi_result *result)
 {
-	struct fsm_dp_drv *drv = mhi_device_get_devdata(mhi_dev);
+	struct fsm_dp_drv *drv = dev_get_drvdata(&mhi_dev->dev);
 	struct fsm_dp_mhi *mhi = &drv->mhi;
 	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
 
@@ -271,18 +260,12 @@ static void __mhi_dl_xfer_cb(
 	}
 }
 
-static void __mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb)
+static void __mhi_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 {
-
-	struct fsm_dp_drv *pdrv = mhi_device_get_devdata(mhi_dev);
+	struct fsm_dp_drv *pdrv = dev_get_drvdata(&mhi_dev->dev);
 
 	switch (mhi_cb) {
-	case MHI_CB_DEVICE_DESTROYED:
-		FSM_DP_WARN("%s: mhi device destroyed\n", __func__);
-		pdrv->mhi.mhi_destroyed = true;
-		wmb();
-		fsm_dp_mempool_dev_destroy(pdrv);
-		break;
+	/* TODO: find a replacement for MHI_CB_DEVICE_DESTROYED */
 	case MHI_CB_PENDING_DATA:
 		if (napi_schedule_prep(&pdrv->napi)) {
 			__napi_schedule(&pdrv->napi);
@@ -319,10 +302,9 @@ static int fsm_dp_mhi_probe(
 	if (__pdrv == NULL)
 		return -ENODEV;
 
-	mhi_device_set_devdata(mhi_dev, __pdrv);
+	dev_set_drvdata(&mhi_dev->dev, pdrv);
 
-
-	ret = mhi_prepare_for_transfer(mhi_dev);
+	ret = mhi_prepare_for_transfer(mhi_dev, 0);
 	if (ret) {
 		FSM_DP_ERROR("%s: mhi_prepare_for_transfer failed\n", __func__);
 		return ret;

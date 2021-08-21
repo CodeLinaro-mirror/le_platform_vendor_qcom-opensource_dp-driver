@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -45,15 +45,10 @@ struct fsm_dp_mhi {
 	 * for mhi_queue_n_transfer.
 	 */
 	bool mhi_destroyed;
-	void *ul_buf_array[FSM_DP_MAX_IOV_SIZE];
-	size_t ul_size_array[FSM_DP_MAX_IOV_SIZE];
-	enum MHI_FLAGS ul_flag_array[FSM_DP_MAX_IOV_SIZE];
-	dma_addr_t ul_dma_addr_array[FSM_DP_MAX_IOV_SIZE];
-
-	void *dl_buf_array[FSM_DP_MAX_IOV_SIZE];
-	size_t dl_size_array[FSM_DP_MAX_IOV_SIZE];
-	enum MHI_FLAGS dl_flag_array[FSM_DP_MAX_IOV_SIZE];
-	dma_addr_t dl_dma_addr_array[FSM_DP_MAX_IOV_SIZE];
+	enum mhi_flags ul_flag_array[FSM_DP_MAX_IOV_SIZE];
+	enum mhi_flags dl_flag_array[FSM_DP_MAX_IOV_SIZE];
+	struct mhi_buf dl_buf_array[FSM_DP_MAX_IOV_SIZE];
+	struct mhi_buf ul_buf_array[FSM_DP_MAX_IOV_SIZE];
 };
 
 int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv);
@@ -75,13 +70,8 @@ static inline int fsm_dp_mhi_n_tx(struct fsm_dp_mhi *mhi,
 	if (mhi->mhi_destroyed)
 		return -ENODEV;
 
-	ret = mhi_queue_n_transfer(mhi->mhi_dev,
-				DMA_TO_DEVICE,
-				mhi->dl_buf_array,
-				mhi->dl_size_array,
-				mhi->dl_flag_array,
-				mhi->dl_dma_addr_array,
-				num);
+	ret = mhi_queue_n_dma(mhi->mhi_dev, DMA_TO_DEVICE, mhi->dl_buf_array,
+			      mhi->dl_flag_array, num);
 	if (!ret)
 		mhi->stats.tx_cnt += num;
 	else

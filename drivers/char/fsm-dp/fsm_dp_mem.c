@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -427,13 +427,13 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 		for (i = 0; i < mem->loc.num_cluster; i++) {
 			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
-					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
+					pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
 			} else {
 				dma_unmap_single(
-					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
+					pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
 					mem->loc.cluster_dma_addr[i],
 					FSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
@@ -629,7 +629,7 @@ int fsm_dp_mempool_dma_map(
 	loc = &mpool->mem.loc;
 	if (loc->dma_mapped)
 		return 0;
-	dev = pdrv->mhi.mhi_dev->mhi_cntrl->dev;
+	dev = pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev;
 	if (type == FSM_DP_MEM_TYPE_UL)
 		direction = DMA_BIDIRECTIONAL; /* rx, tx for rx loopback */
 	else
@@ -758,13 +758,13 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv)
 			for (i = 0; i < mem->loc.num_cluster; i++) {
 				if (i ==  mem->loc.num_cluster - 1) {
 					dma_unmap_single(
-						pdrv->mhi.mhi_dev->mhi_cntrl->dev,
+						pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
 						mem->loc.cluster_dma_addr[i],
 						size,
 						mem->loc.direction);
 				} else {
 					dma_unmap_single(
-						pdrv->mhi.mhi_dev->mhi_cntrl->dev,
+						pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
 						mem->loc.cluster_dma_addr[i],
 						FSM_DP_MEMPOOL_CLUSTER_SIZE,
 						mem->loc.direction);

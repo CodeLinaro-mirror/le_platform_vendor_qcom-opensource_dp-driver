@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -713,13 +713,14 @@ int fsm_dp_tx(
 				pdrv->mhi.dl_flag_array[j] = MHI_CHAIN;
 			else
 				pdrv->mhi.dl_flag_array[j] =  MHI_EOT;
-			pdrv->mhi.dl_size_array[j] = iov[n].iov_len;
-			pdrv->mhi.dl_buf_array[j] = iov[n].iov_base;
+			pdrv->mhi.dl_buf_array[j].len = iov[n].iov_len;
 			if (dma_addr_array[n]) {
-				pdrv->mhi.dl_flag_array[j] |=
-					MHI_FLAGS_DMA_ADDR;
-				pdrv->mhi.dl_dma_addr_array[j] =
+				pdrv->mhi.dl_buf_array[j].dma_addr =
 					dma_addr_array[n];
+				pdrv->mhi.dl_buf_array[j].streaming_dma = true;
+			} else {
+				pdrv->mhi.dl_buf_array[j].dma_addr = 0;
+				pdrv->mhi.dl_buf_array[j].streaming_dma = false;
 			}
 			n++;
 		}
@@ -779,7 +780,7 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 	int ret;
 
 	pdrv = container_of(napi, struct fsm_dp_drv, napi);
-	rx_work = mhi_poll(pdrv->mhi.mhi_dev, budget);
+	rx_work = mhi_poll(pdrv->mhi.mhi_dev, budget, DMA_FROM_DEVICE);
 	if (rx_work < 0) {
 		rx_work = 0;
 		pr_err("Error polling ret:%d\n", rx_work);
