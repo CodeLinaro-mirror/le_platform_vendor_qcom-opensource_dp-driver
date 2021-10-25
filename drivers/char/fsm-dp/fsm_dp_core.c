@@ -407,7 +407,7 @@ static void fsm_dp_rxqueue_cleanup(struct fsm_dp_rxqueue *rxq)
 	}
 }
 
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
+void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length)
 {
 	struct fsm_dp_mempool *mempool;
 	struct fsm_dp_rxqueue *rxq;
@@ -415,6 +415,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
 	unsigned int offset;
 	unsigned int cl;
 	struct fsm_dp_kernel_register_db_entry *preg;
+	void *addr = buf_cntrl + 1;
 
 	if (unlikely(pdrv == NULL || addr == NULL || !length)) {
 		FSM_DP_ERROR("%s: invalid argument\n", __func__);
@@ -714,6 +715,14 @@ int fsm_dp_tx(
 			else
 				pdrv->mhi.dl_flag_array[j] =  MHI_EOT;
 			pdrv->mhi.dl_buf_array[j].len = iov[n].iov_len;
+
+			if (flag & FSM_DP_TX_FLAG_SG) {
+				pdrv->mhi.dl_flag_array[j] |= MHI_SG;
+				pdrv->mhi.dl_buf_array[j].buf = iov[0].iov_base;
+			} else {
+				pdrv->mhi.dl_buf_array[j].buf = iov[n].iov_base;
+			}
+
 			if (dma_addr_array[n]) {
 				pdrv->mhi.dl_buf_array[j].dma_addr =
 					dma_addr_array[n];

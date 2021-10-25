@@ -69,15 +69,17 @@ void fsm_dp_hex_dump(unsigned char *buf, unsigned int len)
 EXPORT_SYMBOL(fsm_dp_hex_dump);
 
 static int __mhi_rx_replenish(
-	struct fsm_dp_mhi *mhi,
+	struct fsm_dp_drv *drv,
 	struct fsm_dp_mempool *mempool)
 {
+	struct fsm_dp_mhi *mhi = &drv->mhi;
 	struct mhi_device *mhi_dev = mhi->mhi_dev;
 	int nr = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 	void *buf;
 	int ret, i, to_xfer;
 	bool outofbuf;
 	unsigned int cluster, c_offset;
+	struct fsm_dp_buf_cntrl *first_buf_cntrl = NULL, *buf_cntrl = NULL, *prev_buf_cntrl = NULL;
 
 	ret = 0;
 	if (nr < mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / 8)
@@ -88,6 +90,7 @@ static int __mhi_rx_replenish(
 		for (i = 0; i < to_xfer; i++) {
 			buf = fsm_dp_mempool_get_buf(mempool, &cluster,
 								&c_offset);
+			FSM_DP_ASSERT(!buf, "can not alloc buffer, cannot use dummy_buf");
 			if (buf == NULL) {
 				mhi->stats.rx_out_of_buf++;
 				FSM_DP_DEBUG("%s: out of rx buffer!\n", __func__);
@@ -98,6 +101,14 @@ static int __mhi_rx_replenish(
 			if (buf !=  mempool->dummy_buf)
 				fsm_dp_set_buf_state(buf,
 					FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
+			/* link all buffers */
+			buf_cntrl = buf - sizeof(struct fsm_dp_buf_cntrl);
+			if (!first_buf_cntrl)
+				first_buf_cntrl = buf_cntrl;
+			else
+				prev_buf_cntrl->next = buf_cntrl;
+			prev_buf_cntrl = buf_cntrl;
+
 			mhi->ul_buf_array[i].buf = buf;
 			mhi->ul_buf_array[i].len = mempool->mem.buf_sz;
 			mhi->ul_flag_array[i] = MHI_EOT;
@@ -142,6 +153,16 @@ static int __mhi_rx_replenish(
 		nr -= to_xfer;
 	}
 
+	if (!drv->rx_tail_buf_cntrl) {
+		/* first repelenish (after probe) */
+		buf_cntrl->next = first_buf_cntrl;
+		drv->rx_head_buf_cntrl = first_buf_cntrl;
+	} else {
+		drv->rx_tail_buf_cntrl->next = first_buf_cntrl;
+		buf_cntrl->next = drv->rx_head_buf_cntrl;
+	}
+	drv->rx_tail_buf_cntrl = buf_cntrl;
+
 	return ret;
 }
 
@@ -169,6 +190,7 @@ static void __mhi_ul_xfer_cb(
 	void *addr = result->buf_addr;
 	struct fsm_dp_mempool *mempool;
 	unsigned int cl;
+	struct fsm_dp_buf_cntrl *buf_cntrl;
 
 	FSM_DP_DEBUG("%s: ul_xfer_result addr=%p dir=%u bytes=%lu status=%d\n",
 		     __func__, result->buf_addr, result->dir,
@@ -177,55 +199,52 @@ static void __mhi_ul_xfer_cb(
 	fsm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
 	mhi->stats.tx_acked++;
 
-	/* Try DL mempool first */
-	mempool = fsm_dp_find_mempool(drv, addr, true, &cl);
+	buf_cntrl = addr - sizeof(struct fsm_dp_buf_cntrl);
+	while (buf_cntrl) {
+		/* Try DL mempool first */
+		mempool = fsm_dp_find_mempool(drv, addr, true, &cl);
 
-	/* Try UL mempool for loopback packet */
-	if (mempool == NULL)
-		mempool = fsm_dp_find_mempool(drv, addr, false, &cl);
+		/* Try UL mempool for loopback packet */
+		if (mempool == NULL)
+			mempool = fsm_dp_find_mempool(drv, addr, false, &cl);
 
-	if (unlikely(mempool == NULL)) {
-		FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
-			  __func__, addr);
-		return;
-	}
+		if (unlikely(mempool == NULL)) {
+			FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
+				  __func__, addr);
+			return;
+		}
 
-	if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
-		FSM_DP_ERROR("%s: mempool %p signature 0x%x error, expect 0x%x\n",
-			  __func__, mempool, mempool->signature, FSM_DP_MEMPOOL_SIG);
-		return;
-	}
+		if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
+			FSM_DP_ERROR("%s: mempool %p signature 0x%x error, expect 0x%x\n",
+				  __func__, mempool, mempool->signature, FSM_DP_MEMPOOL_SIG);
+			return;
+		}
 
-	if (atomic_read(&mempool->out_xmit) == 0) {
-		FSM_DP_ERROR("%s: mempool %p out xmit cnt should not be zero\n",
-			  __func__, mempool);
-		return;
-	}
+		if (atomic_read(&mempool->out_xmit) == 0) {
+			FSM_DP_ERROR("%s: mempool %p out xmit cnt should not be zero\n",
+				  __func__, mempool);
+			return;
+		}
 
-	atomic_dec(&mempool->out_xmit);
+		atomic_dec(&mempool->out_xmit);
 
-	switch (mempool->type) {
-	case FSM_DP_MEM_TYPE_UL:
-		fsm_dp_mempool_put_buf(mempool, addr); /* rx loop back */
-		break;
-	default:
-		{
+		switch (mempool->type) {
+		case FSM_DP_MEM_TYPE_UL:
+			fsm_dp_mempool_put_buf(mempool, addr); /* rx loop back */
+			break;
+		default:
 #ifdef FSM_DP_BUFFER_FENCING
-			struct fsm_dp_buf_cntrl *p;
-			unsigned long cl_off;
-
-			cl_off = (char *) addr -
-				mempool->mem.loc.cluster_kernel_addr[cl];
-			cl_off = cl_off % fsm_dp_buf_true_size(&mempool->mem);
-			p = (struct fsm_dp_buf_cntrl *) (addr - cl_off);
-			if (p->state == FSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
-				p->state =
+			if (buf_cntrl->state == FSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
+				buf_cntrl->state =
 					FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
-			p->xmit_status = FSM_DP_XMIT_OK;
+			buf_cntrl->xmit_status = FSM_DP_XMIT_OK;
 			wmb(); /* make it visible to other CPU */
 #endif
+			break;
 		}
-		break;
+
+		buf_cntrl = buf_cntrl->next;
+		addr = buf_cntrl + 1;
 	}
 }
 
@@ -236,6 +255,7 @@ static void __mhi_dl_xfer_cb(
 	struct fsm_dp_drv *drv = dev_get_drvdata(&mhi_dev->dev);
 	struct fsm_dp_mhi *mhi = &drv->mhi;
 	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
+	struct fsm_dp_buf_cntrl *packet_start, *packet_end, *prev_buf_cntrl = NULL;
 
 	FSM_DP_DEBUG("%s: dl_xfer_result addr=%p dir=%u bytes=%lu status=%d\n",
 		  __func__, result->buf_addr, result->dir,
@@ -251,17 +271,39 @@ static void __mhi_dl_xfer_cb(
 		return;
 	}
 	drv->fsm_dp_outbuf_drop_sync = 0;
-	if (result->transaction_status == -ENOTCONN) {
-		mhi->stats.rx_err++;
-		fsm_dp_mempool_put_buf(mempool, result->buf_addr);
-	} else {
-		mhi->stats.rx_cnt++;
-		fsm_dp_rx(drv, result->buf_addr, result->bytes_xferd);
+
+	packet_start = drv->rx_head_buf_cntrl;
+	packet_end = result->buf_addr - sizeof(struct fsm_dp_buf_cntrl);
+	for (; drv->rx_head_buf_cntrl != drv->rx_tail_buf_cntrl;
+	     drv->rx_head_buf_cntrl = drv->rx_head_buf_cntrl->next) {
+		if (prev_buf_cntrl)
+			prev_buf_cntrl->next_buf_index = drv->rx_head_buf_cntrl->buf_index;
+		prev_buf_cntrl = drv->rx_head_buf_cntrl;
+		if (drv->rx_head_buf_cntrl != packet_end)
+			continue;
+
+		/* reached end of packet */
+		drv->rx_head_buf_cntrl = packet_end->next;
+		packet_end->next = NULL;
+		packet_end->next_buf_index = FSM_DP_INVALID_BUF_INDEX;
+		if (result->transaction_status == -ENOTCONN) {
+			mhi->stats.rx_err++;
+			for (; packet_start; packet_start = packet_start->next)
+				fsm_dp_mempool_put_buf(mempool, packet_start + 1);
+		} else {
+			mhi->stats.rx_cnt++;
+			fsm_dp_rx(drv, packet_start, result->bytes_xferd);
+		}
+
+		return;
 	}
+
+	FSM_DP_ERROR("couldn't find end of packet, buf_addr 0x%p", result->buf_addr);
 }
 
 static void __mhi_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 {
+
 	struct fsm_dp_drv *pdrv = dev_get_drvdata(&mhi_dev->dev);
 
 	switch (mhi_cb) {
@@ -284,7 +326,7 @@ int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv)
 	int ret;
 
 	spin_lock_bh(&mhi->rx_lock);
-	ret = __mhi_rx_replenish(mhi, mempool);
+	ret = __mhi_rx_replenish(drv, mempool);
 	spin_unlock_bh(&mhi->rx_lock);
 	return ret;
 }

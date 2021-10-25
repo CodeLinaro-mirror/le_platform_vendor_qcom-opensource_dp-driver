@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -105,6 +105,8 @@ static int __cdev_tx(
 #endif
 	unsigned int c_offset;
 	unsigned int cluster;
+	struct fsm_dp_buf_cntrl *buf_cntrl = NULL, *prev_buf_cntrl = NULL;
+	unsigned long b_backtrack;
 
 	FSM_DP_DEBUG("%s: iov_nr=%u\n", __func__, iov_nr);
 	if (iov_nr > FSM_DP_MAX_IOV_SIZE)
@@ -171,6 +173,20 @@ static int __cdev_tx(
 			p->xmit_status = FSM_DP_XMIT_IN_PROGRESS;
 		}
 #endif
+
+		/* link SG fragements */
+		b_backtrack = c_offset % fsm_dp_buf_true_size(&mempool->mem);
+		buf_cntrl = (struct fsm_dp_buf_cntrl *)(iov[n].iov_base - b_backtrack);
+		if (sg) {
+			if (prev_buf_cntrl)
+				prev_buf_cntrl->next = buf_cntrl;
+			prev_buf_cntrl = buf_cntrl;
+			if (n == iov_nr - 1)
+				buf_cntrl->next = NULL;
+		}	else {
+			buf_cntrl->next = NULL;
+		}
+
 		atomic_inc(&mempool->out_xmit);
 		if (mempool->mem.loc.dma_mapped &&
 				cdev->tx_mode != TX_MODE_LOOPBACK) {
@@ -188,6 +204,8 @@ static int __cdev_tx(
 		FSM_DP_DEBUG("%s: start tx, kaddr=%p len=%lu\n",
 			  __func__, iov[n].iov_base, iov[n].iov_len);
 	}
+
+	buf_cntrl->next = NULL;
 
 	if (sg)
 		flag |= FSM_DP_TX_FLAG_SG;

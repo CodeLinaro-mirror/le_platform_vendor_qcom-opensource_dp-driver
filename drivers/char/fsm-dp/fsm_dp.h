@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -192,6 +192,8 @@ struct fsm_dp_drv {
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
 
+	struct fsm_dp_buf_cntrl *rx_head_buf_cntrl, *rx_tail_buf_cntrl;
+
 #ifdef CONFIG_FSM_DP_TEST
 	struct fsm_dp_test_ring test_ring;
 #endif
@@ -219,7 +221,7 @@ int fsm_dp_tx(
 	unsigned int flag,
 	dma_addr_t dma_addr[]);
 
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *data, unsigned int length);
+void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
 void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
 
