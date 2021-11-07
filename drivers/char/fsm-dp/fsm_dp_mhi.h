@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/mhi.h>
 #include <linux/skbuff.h>
+#include <linux/kthread.h>
 
 #define FSM_DP_MHI_NAME	"fsm-l1rf-mhi"
 
@@ -41,6 +42,9 @@ struct fsm_dp_mhi {
 	struct fsm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	spinlock_t tx_lock;
+	struct completion poll_comp;
+	struct hrtimer poll_timer;
+	struct task_struct *tx_poll_thread;
 	bool mhi_destroyed;	/* TODO: remove? */
 	/*
 	 * the following are for needed storage

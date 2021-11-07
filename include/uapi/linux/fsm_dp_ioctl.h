@@ -44,6 +44,9 @@
 #define FSM_DP_IOCTL_TX_MODE_CONFIG	\
 		_IOWR(FSM_DP_IOCTL_BASE, 6, unsigned int)
 
+#define FSM_DP_IOCTL_RX_POLL	\
+		_IOWR(FSM_DP_IOCTL_BASE, 7, struct iovec)
+
 /* ioctl command for testing */
 #define FSM_DP_IOCTL_TEST_RING_WRITE	_IO(FSM_DP_IOCTL_BASE, 0x11)
 #define FSM_DP_IOCTL_TEST_RING_GET_CONFIG	\
@@ -171,6 +174,8 @@ struct fsm_dp_buf_cntrl {
 	struct fsm_dp_buf_cntrl *next;	/* used by kernel only */
 	uint32_t next_buf_index;	/* used in Rx, kernel writes, user reads */
 	uint32_t len;			/* used in Rx, kernel writes, user reads */
+	struct fsm_dp_buf_cntrl *next_packet;	/* used in Rx only */
+	uint32_t buf_count;	/* used in Rx only */
 	unsigned char spare[FSM_DP_L1_CACHE_BYTES
 		- sizeof(uint32_t) /* signature */
 		- sizeof(uint32_t) /* state */
@@ -180,6 +185,8 @@ struct fsm_dp_buf_cntrl {
 		- sizeof(struct fsm_dp_buf_cntrl *) /* next */
 		- sizeof(uint32_t) /* next_buf_index */
 		- sizeof(uint32_t) /* len */
+		- sizeof(struct fsm_dp_buf_cntrl *) /* next_packet */
+		- sizeof(uint32_t) /* buf_count */
 		- sizeof(uint32_t)];/* fence */
 	uint32_t fence; /* must be last */
 } __attribute__((packed));

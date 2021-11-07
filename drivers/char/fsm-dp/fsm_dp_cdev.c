@@ -226,6 +226,26 @@ static int __cdev_tx(
 	return ret;
 }
 
+static int __cdev_rx_poll(
+	struct fsm_dp_cdev *cdev,
+	struct iovec __user *uiov,
+	size_t iov_nr)
+{
+	struct fsm_dp_drv *pdrv = cdev->pdrv;
+	struct iovec iov[FSM_DP_MAX_IOV_SIZE];
+	int ret;
+
+	ret = fsm_dp_rx_poll(pdrv, iov, iov_nr);
+
+	if (ret)
+		FSM_DP_DEBUG("%s: fsm_dp_rx_poll ret %d\n", __func__, ret);
+
+	if (ret > 0 && copy_to_user((void __user *)uiov, iov, sizeof(struct iovec) * ret))
+		ret = -EFAULT;
+
+	return ret;
+}
+
 /* Character device interfaces */
 static int __cdev_ioctl_mempool_alloc(
 	struct fsm_dp_cdev *cdev,
@@ -346,6 +366,19 @@ static int __cdev_ioctl_txmode_cfg(
 	return ret;
 }
 
+static int __cdev_ioctl_rx_poll(struct fsm_dp_cdev *cdev, unsigned long ioarg)
+{
+	struct iovec iov;
+
+	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
+		return -EFAULT;
+
+	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
+		return -EINVAL;
+
+	return __cdev_rx_poll(cdev, iov.iov_base, iov.iov_len);
+}
+
 #ifdef CONFIG_FSM_DP_TEST
 static int __cdev_ioctl_testring_write(
 	struct fsm_dp_cdev *cdev,
@@ -439,6 +472,9 @@ static long fsm_dp_cdev_ioctl(
 		break;
 	case FSM_DP_IOCTL_TX_MODE_CONFIG:
 		ret = __cdev_ioctl_txmode_cfg(cdev, ioarg);
+		break;
+	case FSM_DP_IOCTL_RX_POLL:
+		ret = __cdev_ioctl_rx_poll(cdev, ioarg);
 		break;
 #ifdef CONFIG_FSM_DP_TEST
 	case FSM_DP_IOCTL_TEST_RING_WRITE:

@@ -510,6 +510,7 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 				p->fence = FSM_DP_BUFFER_FENCE_SIG;
 				p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
 				p->buf_index = buf_index;
+				p->next_packet = NULL;
 				if (!fsm_dp_mem_type_is_ul(mempool->type))
 					p->xmit_status = FSM_DP_XMIT_OK;
 				/* pointing to start of user data */

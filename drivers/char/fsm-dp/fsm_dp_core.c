@@ -20,7 +20,6 @@
 #include "fsm_dp.h"
 
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
-#define FSM_DP_NAPI_WEIGHT 64
 static struct fsm_dp_drv *fsm_dp_pdrv;
 struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[FSM_DP_NUM_MSG_TYPE];
 
@@ -440,6 +439,17 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		return;
 	}
 
+	if (mempool->type == FSM_DP_MEM_TYPE_UL_DATA) {
+		struct fsm_dp_buf_cntrl **p = &pdrv->pending_packets;
+
+		while (*p)
+			p = &((*p)->next_packet);
+
+		*p = buf_cntrl;
+
+		return;
+	}
+
 	rxq = &pdrv->rxq[FSM_DP_RX_TYPE_LPBK];
 
 	if (!atomic_read(&rxq->refcnt)) {
@@ -500,7 +510,7 @@ int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
 		return -ENOMEM;
 	}
 
-	// TODO: use different buf_size & cnt for UL_DATA
+	/* TODO: use different buf_size & cnt for UL_DATA */
 	pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA] = fsm_dp_mempool_alloc(
 		pdrv,
 		FSM_DP_MEM_TYPE_UL_DATA,
@@ -751,6 +761,9 @@ int fsm_dp_tx(
 				mhi->dl_buf_array[j].buf = iov[n].iov_base;
 			}
 
+			if (ch == FSM_DP_CH_DATA)
+				mhi->dl_flag_array[j] |= MHI_BEI;
+
 			if (dma_addr_array[n]) {
 				mhi->dl_buf_array[j].dma_addr =
 					dma_addr_array[n];
@@ -775,6 +788,63 @@ int fsm_dp_tx(
 		pdrv->stats.tx_cnt++;
 	spin_unlock_bh(&mhi->tx_lock);
 	return ret;
+}
+
+int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr)
+{
+	int ret;
+	struct fsm_dp_buf_cntrl *cur_packet;
+	size_t n = 0, remain = iov_nr;
+
+	if (!fsm_dp_mhi_is_ready(&pdrv->mhi_data_dev))
+		return 0;
+
+	/*
+	 * poll to get packets from MHI. This will cause dl_xfer (RX callback) to get called which
+	 * will then link the Rx packets into pdrv->pending_packets
+	 */
+	ret = mhi_poll(pdrv->mhi_data_dev.mhi_dev, FSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
+	if (ret < 0)
+		pr_err("Error rx polling %d\n", ret);
+
+	ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_data_dev);
+	if (ret < 0)
+		pr_err("Error rx replenish %d\n", ret);
+
+	/* fill iov with the received packets */
+	cur_packet = pdrv->pending_packets;
+	while (cur_packet) {
+		struct fsm_dp_buf_cntrl *cur_buf, *tmp;
+
+		if (cur_packet->buf_count > remain) {
+			if (cur_packet == pdrv->pending_packets)
+				return -EINVAL;	/* provided iov is too short even for 1st packet */
+			/* no more room in iov, we're done */
+			break;
+		}
+
+		for (cur_buf = cur_packet; cur_buf; cur_buf = cur_buf->next) {
+			unsigned int cl;
+			struct fsm_dp_mempool *mempool = fsm_dp_find_mempool(pdrv, cur_buf,
+									     false, &cl);
+
+			FSM_DP_ASSERT(mempool == NULL, "not UL address\n");
+
+			iov[n].iov_base = (void *)fsm_dp_get_mem_offset(cur_buf + 1,
+									&mempool->mem.loc, cl);
+			iov[n].iov_len = cur_buf->len;
+			n++;
+			remain--;
+		}
+
+		tmp = cur_packet;
+		cur_packet = cur_packet->next_packet;
+		tmp->next_packet = NULL;
+	}
+
+	pdrv->pending_packets = cur_packet;
+
+	return n;
 }
 
 static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
@@ -809,7 +879,7 @@ static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 	kfree(pdrv);
 }
 
-// napi function to replenish control channel
+/* napi function to replenish control channel */
 static int fsm_dp_poll(struct napi_struct *napi, int budget)
 {
 	int rx_work = 0;
@@ -836,7 +906,7 @@ exit_poll:
 	return rx_work;
 }
 
-// worker function to replenish control channel, in case replenish failed in napi function
+/* worker function to replenish control channel, in case replenish failed in napi function */
 static void fsm_dp_alloc_work(struct work_struct *work)
 {
 	struct fsm_dp_drv *pdrv;

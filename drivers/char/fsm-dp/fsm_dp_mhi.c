@@ -114,7 +114,10 @@ static int __mhi_rx_replenish(
 
 			mhi->ul_buf_array[i].buf = buf;
 			mhi->ul_buf_array[i].len = mempool->mem.buf_sz;
-			mhi->ul_flag_array[i] = MHI_EOT;
+			if (is_control)
+				mhi->ul_flag_array[i] = MHI_EOT;
+			else
+				mhi->ul_flag_array[i] = MHI_EOT | MHI_BEI;
 			if (mempool->mem.loc.dma_mapped &&
 					buf != mempool->dummy_buf) {
 
@@ -169,6 +172,7 @@ static int __mhi_rx_replenish(
 	return ret;
 }
 
+/*
 static void __mhi_ul_skb_xfer_cmplt(struct sk_buff *skb)
 {
 	struct fsm_dp_msghdr *msghdr;
@@ -183,6 +187,7 @@ static void __mhi_ul_skb_xfer_cmplt(struct sk_buff *skb)
 	skb_pull(skb, sizeof(*msghdr));
 	preg->tx_cmplt_cb(skb);
 }
+*/
 
 static struct fsm_dp_mhi *get_dp_mhi(struct mhi_device *mhi_dev)
 {
@@ -278,6 +283,7 @@ static void __mhi_dl_xfer_cb(
 	struct fsm_dp_mempool *mempool;
 	struct fsm_dp_buf_cntrl *packet_start, *packet_end, *prev_buf_cntrl = NULL;
 	bool is_control = (mhi_dev->id->driver_data == FSM_DP_CH_CONTROL);
+	unsigned int buf_count = 0;
 
 	mempool = is_control ? drv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] :
 			       drv->mempool[FSM_DP_MEM_TYPE_UL_DATA];
@@ -302,6 +308,7 @@ static void __mhi_dl_xfer_cb(
 	packet_end = result->buf_addr - sizeof(struct fsm_dp_buf_cntrl);
 	for (; mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl;
 	     mhi->rx_head_buf_cntrl = mhi->rx_head_buf_cntrl->next) {
+		buf_count++;
 		if (prev_buf_cntrl)
 			prev_buf_cntrl->next_buf_index = mhi->rx_head_buf_cntrl->buf_index;
 		prev_buf_cntrl = mhi->rx_head_buf_cntrl;
@@ -312,6 +319,7 @@ static void __mhi_dl_xfer_cb(
 
 		/* reached end of packet */
 		mhi->rx_head_buf_cntrl = packet_end->next;
+		packet_start->buf_count = buf_count;
 		packet_end->next = NULL;
 		packet_end->next_buf_index = FSM_DP_INVALID_BUF_INDEX;
 		packet_end->len = (result->bytes_xferd % mempool->mem.buf_sz);
@@ -372,6 +380,34 @@ int fsm_dp_mhi_rx_replenish(struct fsm_dp_mhi *mhi)
 	return ret;
 }
 
+/* This is Tx polling thread - polling for Tx completions */
+static int fsm_dp_mhi_tx_poll_thread(void *data)
+{
+	struct mhi_device *mhi_dev = data;
+	struct fsm_dp_drv *pdrv = dev_get_drvdata(&mhi_dev->dev);
+	int ret;
+
+	while (!kthread_should_stop()) {
+		wait_for_completion(&pdrv->mhi_data_dev.poll_comp);
+		ret = mhi_poll(mhi_dev, FSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
+		if (ret < 0)
+			pr_err("Error polling ret:%d\n", ret);
+	}
+
+	return 0;
+}
+
+enum hrtimer_restart fsm_dp_mhi_poll_timer_handler(struct hrtimer *timer)
+{
+	struct fsm_dp_mhi *mhi = container_of(timer, struct fsm_dp_mhi, poll_timer);
+
+	complete(&mhi->poll_comp);
+
+	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, 1000000)); /* 1ms */
+
+	return HRTIMER_RESTART;
+}
+
 static int fsm_dp_mhi_probe(
 	struct mhi_device *mhi_dev,
 	const struct mhi_device_id *id)
@@ -428,12 +464,34 @@ static int fsm_dp_mhi_probe(
 			return ret;
 		}
 	}
+
+	if (id->driver_data == FSM_DP_CH_DATA) {
+		/* Data channel specific initialization - Tx and Rx polling */
+		init_completion(&mhi->poll_comp);
+		mhi->tx_poll_thread = kthread_run(fsm_dp_mhi_tx_poll_thread, mhi_dev,
+						  "fsm_dp_mhi_tx_poll");
+		if (IS_ERR(mhi->tx_poll_thread))
+			FSM_DP_WARN("%s: failed to start tx poll thread\n", __func__);
+
+		hrtimer_init(&mhi->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		mhi->poll_timer.function = fsm_dp_mhi_poll_timer_handler;
+		 /* start in 1ms */
+		hrtimer_start(&mhi->poll_timer, ktime_set(0, 1000000), HRTIMER_MODE_REL);
+	}
+
 	FSM_DP_DEBUG("%s: mhi_probed\n", __func__);
 	return 0;
 }
 
 static void fsm_dp_mhi_remove(struct mhi_device *mhi_dev)
 {
+	struct fsm_dp_drv *pdrv = dev_get_drvdata(&mhi_dev->dev);
+
+	if (mhi_dev->id->driver_data == FSM_DP_CH_DATA) {
+		kthread_stop(pdrv->mhi_data_dev.tx_poll_thread);
+		hrtimer_cancel(&pdrv->mhi_data_dev.poll_timer);
+	}
+
 	mhi_unprepare_from_transfer(mhi_dev);
 }
 

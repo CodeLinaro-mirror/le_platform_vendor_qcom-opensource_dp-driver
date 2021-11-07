@@ -34,6 +34,7 @@
 #define FSM_DP_MODULE_NAME		"fsm-dp"
 #define FSM_DP_DEV_CLASS_NAME	FSM_DP_MODULE_NAME
 #define FSM_DP_CDEV_NAME	FSM_DP_MODULE_NAME
+#define FSM_DP_NAPI_WEIGHT 64
 
 #define FSM_DP_DEBUG	pr_debug
 #define FSM_DP_INFO	pr_info
@@ -193,6 +194,7 @@ struct fsm_dp_drv {
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
 
+	struct fsm_dp_buf_cntrl	*pending_packets;
 
 #ifdef CONFIG_FSM_DP_TEST
 	struct fsm_dp_test_ring test_ring;
@@ -221,7 +223,7 @@ int fsm_dp_tx(
 	unsigned int iov_nr,
 	unsigned int flag,
 	dma_addr_t dma_addr[]);
-
+int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr);
 void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
 void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
