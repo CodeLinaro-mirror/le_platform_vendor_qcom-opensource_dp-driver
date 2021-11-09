@@ -134,14 +134,7 @@ static int __cdev_tx(
 					iov[n].iov_base,
 					&cluster,
 					&c_offset);
-		if (!sg || !n) {
-			iov[n].iov_base = (char *)iov[n].iov_base -
-				sizeof(struct fsm_dp_msghdr);
-			iov[n].iov_len += sizeof(struct fsm_dp_msghdr);
-			((struct fsm_dp_msghdr *)iov[n].iov_base)->sequence =
-				atomic_inc_return(&pdrv->tx_seqnum);
-			c_offset -= sizeof(struct fsm_dp_msghdr);
-		}
+
 #ifdef FSM_DP_BUFFER_FENCING
 		{
 			unsigned long b_backtrack;

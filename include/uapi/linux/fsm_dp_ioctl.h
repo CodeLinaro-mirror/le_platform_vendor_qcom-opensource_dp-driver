@@ -169,6 +169,7 @@ struct fsm_dp_buf_cntrl {
 	uint32_t buf_index;
 	struct fsm_dp_buf_cntrl *next;	/* used by kernel only */
 	uint32_t next_buf_index;	/* used in Rx, kernel writes, user reads */
+	uint32_t len;			/* used in Rx, kernel writes, user reads */
 	unsigned char spare[FSM_DP_L1_CACHE_BYTES
 		- sizeof(uint32_t) /* signature */
 		- sizeof(uint32_t) /* state */
@@ -177,6 +178,7 @@ struct fsm_dp_buf_cntrl {
 		- sizeof(uint32_t) /* buf_index */
 		- sizeof(struct fsm_dp_buf_cntrl *) /* next */
 		- sizeof(uint32_t) /* next_buf_index */
+		- sizeof(uint32_t) /* len */
 		- sizeof(uint32_t)];/* fence */
 	uint32_t fence; /* must be last */
 } __attribute__((packed));

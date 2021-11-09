@@ -411,10 +411,8 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 {
 	struct fsm_dp_mempool *mempool;
 	struct fsm_dp_rxqueue *rxq;
-	struct fsm_dp_msghdr *msghdr;
 	unsigned int offset;
 	unsigned int cl;
-	struct fsm_dp_kernel_register_db_entry *preg;
 	void *addr = buf_cntrl + 1;
 
 	if (unlikely(pdrv == NULL || addr == NULL || !length)) {
@@ -429,49 +427,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		return;
 	}
 
-	msghdr = (struct fsm_dp_msghdr *)addr;
-	if (msghdr->length != length - sizeof(*msghdr)) {
-		FSM_DP_ERROR("%s: length mismatch, payload=%u total=%u\n",
-			     __func__, msghdr->length, length);
-		pdrv->stats.rx_badmsg++;
-		goto free_rxbuf;
-	}
-
-	preg = fsm_dp_find_reg_db_type(msghdr->type);
-	if (preg && preg->pdrv && preg->rx_cb) {
-		preg->rx_cb(
-			mempool->mem.loc.page[cl],
-			(char *) addr -
-				mempool->mem.loc.cluster_kernel_addr[cl],
-			(char *) addr,
-			length);
-		goto done;
-	}
-	switch (msghdr->type) {
-	case FSM_DP_MSG_TYPE_LPBK_REQ:
-		if (rx_loopback(pdrv, addr, length))
-			goto free_rxbuf;
-		goto done;
-	case FSM_DP_MSG_TYPE_LPBK_RSP:
-		rxq = &pdrv->rxq[FSM_DP_RX_TYPE_LPBK];
-		break;
-	case FSM_DP_MSG_TYPE_L1:
-		rxq = &pdrv->rxq[FSM_DP_RX_TYPE_L1];
-		break;
-	case FSM_DP_MSG_TYPE_RF:
-		rxq = &pdrv->rxq[FSM_DP_RX_TYPE_RF];
-		break;
-	case FSM_DP_MSG_TYPE_TA:
-		rxq = &pdrv->rxq[FSM_DP_RX_TYPE_TA];
-		break;
-	case FSM_DP_MSG_TYPE_ORU:
-		rxq = &pdrv->rxq[FSM_DP_RX_TYPE_ORU];
-		break;
-	default:
-		FSM_DP_DEBUG("%s: unsupport msg type(%u)\n",
-			     __func__, msghdr->type);
-		goto free_rxbuf;
-	}
+	rxq = &pdrv->rxq[FSM_DP_RX_TYPE_LPBK];
 
 	if (!atomic_read(&rxq->refcnt)) {
 		FSM_DP_DEBUG("%s: rxq not active, drop message\n", __func__);
@@ -479,7 +435,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 	}
 
 #ifdef FSM_DP_BUFFER_FENCING
-	fsm_dp_set_buf_state(msghdr,
+	fsm_dp_set_buf_state(addr,
 			FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
 	offset = fsm_dp_get_mem_offset(addr, &mempool->mem.loc, cl);
@@ -488,7 +444,6 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		goto free_rxbuf;
 	}
 	wake_up(&rxq->wq);
-done:
 	pdrv->stats.rx_cnt++;
 	return;
 free_rxbuf:
@@ -702,6 +657,47 @@ int fsm_dp_tx(
 			return -EINVAL;
 		}
 	}
+
+	{
+		struct fsm_dp_msghdr *msghdr = NULL;
+		unsigned int total_len = 0;
+
+		for (n = 0; n < iov_nr; n++) {
+			struct fsm_dp_mempool *mempool;
+			unsigned int cl;
+
+
+			mempool = fsm_dp_find_mempool(pdrv, iov[n].iov_base, true, &cl);
+			if (mempool == NULL) {
+				FSM_DP_ERROR("%s: fsm_dp_find_mempool failed addr=0x%p\n",
+					     __func__, iov[n].iov_base);
+				return -EINVAL;
+			}
+
+			if ((flag & FSM_DP_TX_FLAG_SG) && n) {
+				total_len += iov[n].iov_len;
+				continue;
+			}
+
+			/* add fsm_dp_msghdr to each non-SG buffer and to first SG buffer */
+			FSM_DP_ASSERT(iov[n].iov_len + sizeof(*msghdr) > mempool->mem.buf_sz,
+				      "invalid len");
+			memmove(iov[n].iov_base + sizeof(*msghdr), iov[n].iov_base, iov[n].iov_len);
+
+			msghdr = iov[n].iov_base;
+			memset(msghdr, 0, sizeof(*msghdr));
+			msghdr->version = FSM_DP_MSG_HDR_VERSION;
+			msghdr->type = FSM_DP_MSG_TYPE_LPBK_REQ;
+			msghdr->length = iov[n].iov_len;
+			msghdr->sequence = atomic_inc_return(&pdrv->tx_seqnum);
+
+			iov[n].iov_len += sizeof(*msghdr);
+		}
+		/* 1st buffer in SG have total length */
+		if (flag & FSM_DP_TX_FLAG_SG)
+			msghdr->length += total_len;
+	}
+
 	spin_lock_bh(&pdrv->mhi.tx_lock);
 	to_send = 0;
 	for (n = 0, to_send = iov_nr; to_send > 0; ) {

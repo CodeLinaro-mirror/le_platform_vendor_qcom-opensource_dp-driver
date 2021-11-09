@@ -181,6 +181,7 @@ static void __mhi_ul_skb_xfer_cmplt(struct sk_buff *skb)
 	preg->tx_cmplt_cb(skb);
 }
 
+/* TX complete */
 static void __mhi_ul_xfer_cb(
 	struct mhi_device *mhi_dev,
 	struct mhi_result *result)
@@ -248,6 +249,7 @@ static void __mhi_ul_xfer_cb(
 	}
 }
 
+/* RX */
 static void __mhi_dl_xfer_cb(
 	struct mhi_device *mhi_dev,
 	struct mhi_result *result)
@@ -279,21 +281,37 @@ static void __mhi_dl_xfer_cb(
 		if (prev_buf_cntrl)
 			prev_buf_cntrl->next_buf_index = drv->rx_head_buf_cntrl->buf_index;
 		prev_buf_cntrl = drv->rx_head_buf_cntrl;
-		if (drv->rx_head_buf_cntrl != packet_end)
+		if (drv->rx_head_buf_cntrl != packet_end) {
+			drv->rx_head_buf_cntrl->len = mempool->mem.buf_sz;
 			continue;
+		}
 
 		/* reached end of packet */
 		drv->rx_head_buf_cntrl = packet_end->next;
 		packet_end->next = NULL;
 		packet_end->next_buf_index = FSM_DP_INVALID_BUF_INDEX;
+		packet_end->len = (result->bytes_xferd % mempool->mem.buf_sz);
 		if (result->transaction_status == -ENOTCONN) {
 			mhi->stats.rx_err++;
 			for (; packet_start; packet_start = packet_start->next)
 				fsm_dp_mempool_put_buf(mempool, packet_start + 1);
-		} else {
-			mhi->stats.rx_cnt++;
-			fsm_dp_rx(drv, packet_start, result->bytes_xferd);
+			return;
 		}
+		{
+			/* remove msghdr from 1st buffer (next buffers don't have msghdr) */
+			void *buf = packet_start + 1;
+
+			FSM_DP_ASSERT(result->bytes_xferd <= sizeof(struct fsm_dp_msghdr),
+					"invalid bytes_xferd");
+			memmove(buf,
+				buf + sizeof(struct fsm_dp_msghdr),
+				min_t(unsigned int, result->bytes_xferd, mempool->mem.buf_sz)
+					- sizeof(struct fsm_dp_msghdr));
+			packet_start->len -= sizeof(struct fsm_dp_msghdr);
+		}
+
+		mhi->stats.rx_cnt++;
+		fsm_dp_rx(drv, packet_start, result->bytes_xferd);
 
 		return;
 	}
