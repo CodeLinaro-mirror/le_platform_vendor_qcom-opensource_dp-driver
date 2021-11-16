@@ -213,7 +213,6 @@ static void __mhi_ul_xfer_cb(
 	struct fsm_dp_mhi *mhi = get_dp_mhi(mhi_dev);
 	void *addr = result->buf_addr;
 	struct fsm_dp_mempool *mempool;
-	unsigned int cl;
 	struct fsm_dp_buf_cntrl *buf_cntrl;
 
 	FSM_DP_DEBUG("%s: ul_xfer_result (TX complete) addr=%p dir=%u bytes=%lu status=%d\n",
@@ -225,13 +224,7 @@ static void __mhi_ul_xfer_cb(
 
 	buf_cntrl = addr - sizeof(struct fsm_dp_buf_cntrl);
 	while (buf_cntrl) {
-		/* Try DL mempool first */
-		mempool = fsm_dp_find_mempool(drv, addr, true, &cl);
-
-		/* Try UL mempool for loopback packet */
-		if (mempool == NULL)
-			mempool = fsm_dp_find_mempool(drv, addr, false, &cl);
-
+		mempool = fsm_dp_get_mempool(drv, buf_cntrl, NULL);
 		if (unlikely(mempool == NULL)) {
 			FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
 				  __func__, addr);

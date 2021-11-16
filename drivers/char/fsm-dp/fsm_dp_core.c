@@ -113,22 +113,19 @@ static void handle_tx_loopback(
 	struct fsm_dp_rxqueue *rxq;
 	unsigned int offset;
 	void *dst;
-	unsigned int cluster, tx_cl;
-	unsigned int c_offset, tx_off;
+	unsigned int cluster;
+	unsigned int c_offset;
 	struct fsm_dp_buf_cntrl *p;
 	int err = FSM_DP_XMIT_OK;
 
-	tx_mempool = fsm_dp_find_mempool(drv, job->data, true, &tx_cl);
+	p = job->data - sizeof(struct fsm_dp_buf_cntrl);
+	tx_mempool = fsm_dp_get_mempool(drv, p, NULL);
 	if (tx_mempool == NULL) {
 		drv->loopback.stats.tx_drop++;
 		FSM_DP_ERROR("%s: cannot to find source memory pool\n",
 			  __func__);
 		return;
 	}
-	tx_off = vaddr_offset(job->data,
-			tx_mempool->mem.loc.cluster_kernel_addr[tx_cl]);
-	tx_off = tx_off % fsm_dp_buf_true_size(&tx_mempool->mem);
-	p = (struct fsm_dp_buf_cntrl *) (job->data - tx_off);
 	p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
 
 	if (!fsm_dp_rx_type_is_valid(job->dest)) {
@@ -240,9 +237,10 @@ static int tx_loopback(
 	struct fsm_dp_msghdr *msghdr = data;
 	unsigned int dest = FSM_DP_RX_TYPE_LPBK;
 	unsigned long flags;
-	unsigned int cl;
+	struct fsm_dp_buf_cntrl *buf_cntrl;
 
-	mempool = fsm_dp_find_mempool(pdrv, data, true, &cl);
+	buf_cntrl = data - sizeof(struct fsm_dp_buf_cntrl);
+	mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, NULL);
 	if (mempool == NULL) {
 		FSM_DP_ERROR("%s: failed find memory pool\n", __func__);
 		return -EINVAL;
@@ -432,7 +430,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		return;
 	}
 
-	mempool = fsm_dp_find_mempool(pdrv, addr, false, &cl);
+	mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, &cl);
 	if (mempool == NULL) {
 		FSM_DP_ERROR("%s: not UL address, addr=%p\n",
 			  __func__, addr);
@@ -706,12 +704,12 @@ int fsm_dp_tx(
 
 		for (n = 0; n < iov_nr; n++) {
 			struct fsm_dp_mempool *mempool;
-			unsigned int cl;
+			struct fsm_dp_buf_cntrl *buf_cntrl;
 
-
-			mempool = fsm_dp_find_mempool(pdrv, iov[n].iov_base, true, &cl);
+			buf_cntrl = iov[n].iov_base - sizeof(struct fsm_dp_buf_cntrl);
+			mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, NULL);
 			if (mempool == NULL) {
-				FSM_DP_ERROR("%s: fsm_dp_find_mempool failed addr=0x%p\n",
+				FSM_DP_ERROR("%s: fsm_dp_get_mempool failed addr=0x%p\n",
 					     __func__, iov[n].iov_base);
 				return -EINVAL;
 			}
@@ -825,11 +823,11 @@ int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr)
 
 		for (cur_buf = cur_packet; cur_buf; cur_buf = cur_buf->next) {
 			unsigned int cl;
-			struct fsm_dp_mempool *mempool = fsm_dp_find_mempool(pdrv, cur_buf,
-									     false, &cl);
+			struct fsm_dp_mempool *mempool = pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA];
 
 			FSM_DP_ASSERT(mempool == NULL, "not UL address\n");
 
+			cl = fsm_dp_mem_get_cluster(&mempool->mem, cur_buf->buf_index);
 			iov[n].iov_base = (void *)fsm_dp_get_mem_offset(cur_buf + 1,
 									&mempool->mem.loc, cl);
 			iov[n].iov_len = cur_buf->len;

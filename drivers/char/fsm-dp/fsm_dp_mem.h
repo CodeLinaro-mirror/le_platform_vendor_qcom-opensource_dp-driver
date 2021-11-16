@@ -164,11 +164,11 @@ bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring);
 
 int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg);
 
-struct fsm_dp_mempool *fsm_dp_find_mempool(
+struct fsm_dp_mempool *fsm_dp_get_mempool(
 	struct fsm_dp_drv *drv,
-	void *addr,
-	bool tx,
+	struct fsm_dp_buf_cntrl *buf_cntrl,
 	unsigned int *cluster);
+uint16_t fsm_dp_mem_get_cluster(struct fsm_dp_mem *mem, unsigned int buf_index);
 
 int fsm_dp_mempool_dma_map(
 	struct device *dev,	/* device for iommu ops */

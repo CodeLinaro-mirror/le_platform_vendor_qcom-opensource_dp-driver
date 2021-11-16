@@ -509,6 +509,7 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 				p->signature = FSM_DP_BUFFER_SIG;
 				p->fence = FSM_DP_BUFFER_FENCE_SIG;
 				p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
+				p->mem_type = mempool->type;
 				p->buf_index = buf_index;
 				p->next_packet = NULL;
 				if (!fsm_dp_mem_type_is_ul(mempool->type))
@@ -914,55 +915,33 @@ void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
 	return ptr;
 }
 
-struct fsm_dp_mempool *fsm_dp_find_mempool(
+struct fsm_dp_mempool *fsm_dp_get_mempool(
 	struct fsm_dp_drv *pdrv,
-	void *addr,
-	bool tx,
+	struct fsm_dp_buf_cntrl *buf_cntrl,
 	unsigned int *cluster)
 {
-	struct fsm_dp_mempool *mempool = NULL;
-	struct fsm_dp_mem *mem;
-	unsigned int mem_type, mem_type_last;
+	struct fsm_dp_mempool *mempool;
 
-	if (unlikely(pdrv == NULL || addr == NULL))
+	if (!fsm_dp_mem_type_is_valid(buf_cntrl->mem_type))
 		return NULL;
 
-	if (tx) {
-		mem_type = 0;
-		mem_type_last = FSM_DP_MEM_TYPE_UL_CONTROL;
-	} else {
-		mem_type = FSM_DP_MEM_TYPE_UL_CONTROL;
-		mem_type_last = FSM_DP_MEM_TYPE_LAST;
-	}
+	mempool = pdrv->mempool[buf_cntrl->mem_type];
+	if (!mempool)
+		return NULL;
 
-	for (; mem_type < mem_type_last; mem_type++) {
-		unsigned int clust;
-		unsigned int remainder;
-		unsigned int len;
+	if (buf_cntrl->buf_index >= U16_MAX * mempool->mem.loc.buf_per_cluster)
+		return NULL;
 
-		mempool = pdrv->mempool[mem_type];
-		if (mempool) {
-			mem = &mempool->mem;
-			remainder = mem->loc.size;
-			for (clust = 0; clust < mem->loc.num_cluster;
-							clust++) {
-				if (clust == mem->loc.num_cluster - 1)
-					len = remainder;
-				else
-					len = FSM_DP_MEMPOOL_CLUSTER_SIZE;
-				if (vaddr_in_range(
-					addr,
-					mem->loc.cluster_kernel_addr[clust],
-					len)) {
-					*cluster = clust;
-					return mempool;
-				}
+	if (cluster)
+		*cluster = fsm_dp_mem_get_cluster(&mempool->mem, buf_cntrl->buf_index);
 
-				remainder -= len;
-			}
-		}
-	}
-	return NULL;
+	return mempool;
+}
+
+uint16_t fsm_dp_mem_get_cluster(struct fsm_dp_mem *mem, unsigned int buf_index)
+{
+	FSM_DP_ASSERT(buf_index >= U16_MAX * mem->loc.buf_per_cluster, "invalid buf_index");
+	return buf_index / mem->loc.buf_per_cluster;
 }
 
 #define FSM_DP_SYNC_THRESHOLD 4
