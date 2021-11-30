@@ -35,7 +35,7 @@ static const struct file_operations name ##_ops = {		\
 }
 
 #ifdef CONFIG_FSM_DP_TEST
-static int debugfs_create_testring_dir(struct dentry *, struct fsm_dp_drv *);
+static int debugfs_create_testring_dir(struct dentry *, struct fsm_dp_dev *);
 #endif
 
 static struct dentry *__dent;
@@ -574,11 +574,11 @@ DEFINE_DEBUGFS_OPS(debugfs_mempool_state, debugfs_mempool_state_show, NULL);
 
 static int debugfs_mempool_active_show(struct seq_file *s, void *unused)
 {
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
+	struct fsm_dp_dev *pdev = (struct fsm_dp_dev *)s->private;
 	unsigned int type;
 
 	for (type = 0; type < FSM_DP_MEM_TYPE_LAST; type++) {
-		if (drv->mempool[type])
+		if (pdev->mempool[type])
 			seq_printf(s, "%s ", fsm_dp_mem_type_to_str(type));
 	}
 	seq_puts(s, "\n");
@@ -593,7 +593,7 @@ static int debugfs_mempool_info_show(struct seq_file *s, void *unused)
 
 	if (mempool) {
 		seq_printf(s, "Driver:                 %llx\n",
-							(u64) mempool->drv);
+							(u64) mempool->dp_dev);
 		seq_printf(s, "MemPool:                %llx\n",
 							(u64) mempool);
 		seq_printf(s, "Type:                   %s\n",
@@ -632,16 +632,19 @@ DEFINE_DEBUGFS_OPS(debugfs_mhi, debugfs_mhi_show, NULL);
 
 static int debugfs_cdev_show(struct seq_file *s, void *unused)
 {
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
+	struct fsm_dp_dev *pdev = (struct fsm_dp_dev *)s->private;
 	struct fsm_dp_cdev *cdev;
 	int n = 0;
 	int i;
 
-	mutex_lock(&drv->cdev_lock);
-	list_for_each_entry(cdev, &drv->cdev_head, list) {
+	if (!pdev->cdev_inited)
+		return 0;
+
+	mutex_lock(&pdev->cdev_lock);
+	list_for_each_entry(cdev, &pdev->cdev_head, list) {
 		seq_printf(s, "CDEV(%d)\n", n++);
 		seq_printf(s, "Driver:                 %llx\n",
-							(u64) cdev->pdrv);
+							(u64) cdev->pdev);
 		seq_printf(s, "Cdev:                   %llx\n",
 							(u64) cdev);
 		seq_printf(s, "PID:                    %d\n",
@@ -657,16 +660,16 @@ static int debugfs_cdev_show(struct seq_file *s, void *unused)
 		for (i = 0; i < FSM_DP_RX_TYPE_LAST; i++)
 			__fsm_dp_rxqueue_vma_dump(s, &cdev->rxqueue_vma[i]);
 	}
-	mutex_unlock(&drv->cdev_lock);
+	mutex_unlock(&pdev->cdev_lock);
 
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_cdev, debugfs_cdev_show, NULL);
 
-static int debugfs_drv_status_show(struct seq_file *s, void *unused)
+static int debugfs_dev_status_show(struct seq_file *s, void *unused)
 {
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
-	struct fsm_dp_core_stats *stats = &drv->stats;
+	struct fsm_dp_dev *pdev = (struct fsm_dp_dev *)s->private;
+	struct fsm_dp_core_stats *stats = &pdev->stats;
 
 	seq_printf(s, "TX:             %lu\n", stats->tx_cnt);
 	seq_printf(s, "TX_ERR:         %lu\n", stats->tx_err);
@@ -677,7 +680,7 @@ static int debugfs_drv_status_show(struct seq_file *s, void *unused)
 	seq_printf(s, "RX_BUDGET_OVF:  %lu\n", stats->rx_budget_overflow);
 	return 0;
 }
-DEFINE_DEBUGFS_OPS(debugfs_drv_status, debugfs_drv_status_show, NULL);
+DEFINE_DEBUGFS_OPS(debugfs_dev_status, debugfs_dev_status_show, NULL);
 
 static int debugfs_drv_show(struct seq_file *s, void *unused)
 {
@@ -691,7 +694,7 @@ static int debugfs_drv_show(struct seq_file *s, void *unused)
 DEFINE_DEBUGFS_OPS(debugfs_drv, debugfs_drv_show, NULL);
 
 static int debugfs_create_loopback_dir(struct dentry *parent,
-				       struct fsm_dp_drv *drv)
+				       struct fsm_dp_dev *pdev)
 {
 	struct dentry *entry = NULL, *dentry = NULL;
 
@@ -700,14 +703,14 @@ static int debugfs_create_loopback_dir(struct dentry *parent,
 		return -ENOMEM;
 
 	entry = debugfs_create_file("status", 0444, dentry,
-				    &drv->loopback,
+				    &pdev->loopback,
 				    &debugfs_loopback_ops);
 	if (!entry)
 		return -ENOMEM;
 	return 0;
 }
 
-static int debugfs_create_rxq_dir(struct dentry *parent, struct fsm_dp_drv *drv)
+static int debugfs_create_rxq_dir(struct dentry *parent, struct fsm_dp_dev *pdev)
 {
 	struct dentry *entry = NULL, *dentry = NULL, *root = NULL;
 	unsigned int type;
@@ -723,25 +726,25 @@ static int debugfs_create_rxq_dir(struct dentry *parent, struct fsm_dp_drv *drv)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("config", 0444, dentry,
-					    &drv->rxq[type],
+					    &pdev->rxq[type],
 					    &debugfs_rxq_config_ops);
 		if (!entry)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("runtime", 0444, dentry,
-					    &drv->rxq[type],
+					    &pdev->rxq[type],
 					    &debugfs_rxq_runtime_ops);
 		if (!entry)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("opstats", 0444, dentry,
-					    &drv->rxq[type],
+					    &pdev->rxq[type],
 					    &debugfs_rxq_opstats_ops);
 		if (!entry)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("refcnt", 0444, dentry,
-					    &drv->rxq[type],
+					    &pdev->rxq[type],
 					    &debugfs_rxq_refcnt_ops);
 		if (!entry)
 			return -ENOMEM;
@@ -831,7 +834,7 @@ static int debugfs_create_mem_dir(
 
 static int debugfs_create_mempool_dir(
 	struct dentry *parent,
-	struct fsm_dp_drv *drv)
+	struct fsm_dp_dev *pdev)
 {
 	struct dentry *entry = NULL, *dentry = NULL, *root = NULL;
 	int ret;
@@ -841,7 +844,7 @@ static int debugfs_create_mempool_dir(
 	if (IS_ERR(root))
 		return -ENOMEM;
 
-	entry = debugfs_create_file("active", 0444, root, drv,
+	entry = debugfs_create_file("active", 0444, root, pdev,
 				    &debugfs_mempool_active_ops);
 	if (!entry)
 		return -ENOMEM;
@@ -851,28 +854,28 @@ static int debugfs_create_mempool_dir(
 		if (IS_ERR(dentry))
 			return -ENOMEM;
 
-		ret = debugfs_create_ring_dir(dentry, &drv->mempool[type]);
+		ret = debugfs_create_ring_dir(dentry, &pdev->mempool[type]);
 		if (ret)
 			return ret;
 
-		ret = debugfs_create_mem_dir(dentry, &drv->mempool[type]);
+		ret = debugfs_create_mem_dir(dentry, &pdev->mempool[type]);
 		if (ret)
 			return ret;
 
 		entry = debugfs_create_file("info", 0444, dentry,
-					    &drv->mempool[type],
+					    &pdev->mempool[type],
 					    &debugfs_mempool_info_ops);
 		if (!entry)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("status", 0444, dentry,
-					    &drv->mempool[type],
+					    &pdev->mempool[type],
 					    &debugfs_mempool_status_ops);
 		if (!entry)
 			return -ENOMEM;
 
 		entry = debugfs_create_file("state", 0444, dentry,
-					    &drv->mempool[type],
+					    &pdev->mempool[type],
 					    &debugfs_mempool_state_ops);
 		if (!entry)
 			return -ENOMEM;
@@ -883,55 +886,62 @@ static int debugfs_create_mempool_dir(
 int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 {
 	struct dentry *entry = NULL;
+	struct dentry *dp_dev_entry;
+	int i;
 
 	if (unlikely(drv == NULL))
 		return -EINVAL;
 
 	if (unlikely(__dent))
 		return -EBUSY;
-
 	__dent = debugfs_create_dir(FSM_DP_MODULE_NAME, 0);
 	if (IS_ERR(__dent))
 		return -ENOMEM;
-
 	entry = debugfs_create_file("driver", 0444, __dent, drv,
 				    &debugfs_drv_ops);
 	if (!entry)
 		goto err;
+	for (i = 0; i < FSM_DP_MAX_NUM_DEVS; i++) {
+		char buf[10];
+		struct fsm_dp_dev *pdev = &drv->dp_devs[i];
 
-	entry = debugfs_create_file("cdev", 0444, __dent, drv,
-				    &debugfs_cdev_ops);
-	if (!entry)
-		goto err;
+		snprintf(buf, sizeof(buf), "dev%d", i);
+		dp_dev_entry = debugfs_create_dir(buf, __dent);
+		if (IS_ERR(dp_dev_entry))
+			goto err;
+		entry = debugfs_create_file("cdev", 0444, dp_dev_entry, pdev,
+							&debugfs_cdev_ops);
+		if (!entry)
+			goto err;
+		entry = debugfs_create_file("mhi_control_dev", 0444, dp_dev_entry,
+					    &pdev->mhi_control_dev, &debugfs_mhi_ops);
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("mhi_control_dev", 0444, __dent, &drv->mhi_control_dev,
-				    &debugfs_mhi_ops);
-	if (!entry)
-		goto err;
+		entry = debugfs_create_file("mhi_data_dev", 0444, dp_dev_entry,
+					    &pdev->mhi_data_dev, &debugfs_mhi_ops);
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("mhi_data_dev", 0444, __dent, &drv->mhi_data_dev,
-				    &debugfs_mhi_ops);
-	if (!entry)
-		goto err;
+		entry = debugfs_create_file("status", 0444, dp_dev_entry, pdev,
+							&debugfs_dev_status_ops);
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("status", 0444, __dent, drv,
-				    &debugfs_drv_status_ops);
-	if (!entry)
-		goto err;
+		if (debugfs_create_mempool_dir(dp_dev_entry, pdev))
+			goto err;
 
-	if (debugfs_create_mempool_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_rxq_dir(dp_dev_entry, pdev))
+			goto err;
 
-	if (debugfs_create_rxq_dir(__dent, drv))
-		goto err;
-
-	if (debugfs_create_loopback_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_loopback_dir(dp_dev_entry, pdev))
+			goto err;
 
 #ifdef CONFIG_FSM_DP_TEST
-	if (debugfs_create_testring_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_testring_dir(dp_dev_entry, pdev))
+			goto err;
 #endif
+	}
 
 	return 0;
 err:
@@ -1014,7 +1024,7 @@ DEFINE_DEBUGFS_OPS(debugfs_testring_runtime,
 
 static int debugfs_create_testring_dir(
 	struct dentry *parent,
-	struct fsm_dp_drv *drv)
+	struct fsm_dp_dev *pdev)
 {
 	struct dentry *entry = NULL, *dentry = NULL;
 
@@ -1023,25 +1033,25 @@ static int debugfs_create_testring_dir(
 		return -ENOMEM;
 
 	entry = debugfs_create_file("config", 0444, dentry,
-				    &drv->test_ring,
+				    &pdev->test_ring,
 				    &debugfs_testring_config_ops);
 	if (!entry)
 		return -ENOMEM;
 
 	entry = debugfs_create_file("runtime", 0444, dentry,
-				    &drv->test_ring,
+				    &pdev->test_ring,
 				    &debugfs_testring_runtime_ops);
 	if (!entry)
 		return -ENOMEM;
 
 	entry = debugfs_create_file("opstats", 0444, dentry,
-				    &drv->test_ring,
+				    &pdev->test_ring,
 				    &debugfs_testring_opstats_ops);
 	if (!entry)
 		return -ENOMEM;
 
 	entry = debugfs_create_file("enable", 0644, dentry,
-				    &drv->test_ring,
+				    &pdev->test_ring,
 				    &debugfs_testring_enable_ops);
 	if (!entry)
 		return -ENOMEM;

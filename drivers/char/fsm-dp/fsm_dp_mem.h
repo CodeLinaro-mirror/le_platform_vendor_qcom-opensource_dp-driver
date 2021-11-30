@@ -95,7 +95,7 @@ struct fsm_dp_mempool_stats {
 
 struct fsm_dp_mempool {
 	unsigned int signature;
-	struct fsm_dp_drv *drv;
+	struct fsm_dp_dev *dp_dev;
 	enum fsm_dp_mem_type type;
 	struct fsm_dp_ring ring;
 	struct fsm_dp_mem mem;
@@ -107,7 +107,7 @@ struct fsm_dp_mempool {
 };
 
 struct fsm_dp_mempool *fsm_dp_mempool_alloc(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	enum fsm_dp_mem_type type,
 	unsigned int buf_sz,
 	unsigned int buf_cnt,
@@ -165,7 +165,7 @@ bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring);
 int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg);
 
 struct fsm_dp_mempool *fsm_dp_get_mempool(
-	struct fsm_dp_drv *drv,
+	struct fsm_dp_dev *pdev,
 	struct fsm_dp_buf_cntrl *buf_cntrl,
 	unsigned int *cluster);
 uint16_t fsm_dp_mem_get_cluster(struct fsm_dp_mem *mem, unsigned int buf_index);
@@ -174,7 +174,7 @@ int fsm_dp_mempool_dma_map(
 	struct device *dev,	/* device for iommu ops */
 	struct fsm_dp_mempool *mpool);
 
-bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv);
+bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_dev *pdev);
 
 /* inline */
 static __always_inline bool __ulong_in_range(

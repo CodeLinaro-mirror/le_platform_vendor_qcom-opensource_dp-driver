@@ -80,6 +80,8 @@ struct vm_area_struct;
 		panic(msg); \
 } while (0)
 
+#define FSM_DP_MAX_NUM_DEVS 4
+
 /*
  * vma mapping for mempool which includes
  * - buffer memory region
@@ -115,7 +117,7 @@ struct fsm_dp_rxqueue {
 /* Per-process character device structure */
 struct fsm_dp_cdev {
 	struct list_head list;
-	struct fsm_dp_drv *pdrv;
+	struct fsm_dp_dev *pdev;
 	pid_t pid;
 
 	/* vma mapping for memory pool */
@@ -174,11 +176,11 @@ struct fsm_dp_core_stats {
 	unsigned long rx_budget_overflow;
 };
 
-struct fsm_dp_drv {
-	struct device *dev;
-	struct class *dev_class;
+struct fsm_dp_dev {
+	struct fsm_dp_drv *pdrv;		/* parent */
 	struct fsm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
 	struct fsm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
+	bool cdev_inited;
 	struct cdev cdev;
 	struct net_device dummy_dev;
 	struct napi_struct napi;
@@ -201,6 +203,13 @@ struct fsm_dp_drv {
 #endif
 };
 
+struct fsm_dp_drv {
+	struct device *dev;
+	struct class *dev_class;
+	dev_t devno;
+	struct fsm_dp_dev dp_devs[FSM_DP_MAX_NUM_DEVS];
+};
+
 struct fsm_dp_kernel_register_db_entry {
 	struct fsm_dp_drv *pdrv;
 	enum fsm_dp_msg_type msg_type;
@@ -211,20 +220,22 @@ struct fsm_dp_kernel_register_db_entry {
 
 int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv);
+int fsm_dp_cdev_add(struct fsm_dp_dev *pdev);
+void fsm_dp_cdev_del(struct fsm_dp_dev *pdev);
 
 int fsm_dp_debugfs_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_debugfs_cleanup(struct fsm_dp_drv *pdrv);
 
 
 int fsm_dp_tx(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	enum fsm_dp_channel ch,
 	struct iovec *iov,
 	unsigned int iov_nr,
 	unsigned int flag,
 	dma_addr_t dma_addr[]);
-int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr);
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
+int fsm_dp_rx_poll(struct fsm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
+void fsm_dp_rx(struct fsm_dp_dev *pdev, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
 void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
 
@@ -249,6 +260,6 @@ fsm_dp_find_reg_db_type(enum fsm_dp_msg_type msg_type)
 	return NULL;
 };
 
-void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv);
+void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev);
 
 #endif /* __FSM_DP__ */

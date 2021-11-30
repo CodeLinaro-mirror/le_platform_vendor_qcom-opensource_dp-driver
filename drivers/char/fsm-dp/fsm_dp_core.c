@@ -30,38 +30,38 @@ struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[FSM_DP_NUM_MSG_TYPE];
 
 
 
-static int fsm_dp_test_init(struct fsm_dp_drv *pdrv)
+static int fsm_dp_test_init(struct fsm_dp_dev *pdev)
 {
 	int ret;
 
-	ret = fsm_dp_ring_init(&pdrv->test_ring.ring,
+	ret = fsm_dp_ring_init(&pdev->test_ring.ring,
 			       DEFAULT_TEST_RING_SIZE,
 			       TEST_RING_MMAP_COOKIE);
 	return ret;
 }
 
-static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
+static void fsm_dp_test_cleanup(struct fsm_dp_dev *pdev)
 {
-	fsm_dp_ring_cleanup(&pdrv->test_ring.ring);
+	fsm_dp_ring_cleanup(&pdev->test_ring.ring);
 }
 #else
-static int fsm_dp_test_init(struct fsm_dp_drv *pdrv)
+static int fsm_dp_test_init(struct fsm_dp_dev *pdev)
 {
 	return 0;
 }
 
-static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
+static void fsm_dp_test_cleanup(struct fsm_dp_dev *pdev)
 {
 }
 #endif
 
-static struct fsm_dp_mhi *get_dp_mhi(struct fsm_dp_drv *drv, enum fsm_dp_channel ch)
+static struct fsm_dp_mhi *get_dp_mhi(struct fsm_dp_dev *pdev, enum fsm_dp_channel ch)
 {
 	switch (ch) {
 	case FSM_DP_CH_CONTROL:
-		return &drv->mhi_control_dev;
+		return &pdev->mhi_control_dev;
 	case FSM_DP_CH_DATA:
-		return &drv->mhi_data_dev;
+		return &pdev->mhi_data_dev;
 	default:
 		FSM_DP_ASSERT(0, "invalid ch");
 		return NULL;
@@ -69,14 +69,14 @@ static struct fsm_dp_mhi *get_dp_mhi(struct fsm_dp_drv *drv, enum fsm_dp_channel
 }
 
 static void handle_rx_loopback(
-	struct fsm_dp_drv *drv,
+	struct fsm_dp_dev *pdev,
 	struct iovec *iov,
 	unsigned int num)
 {
 	struct fsm_dp_msghdr *msghdr;
 	int ret;
 	int i;
-	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
+	struct fsm_dp_mempool *mempool = pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	dma_addr_t dma_addr_array[FSM_DP_MAX_IOV_SIZE];
 
 	for (i = 0; i < num; i++) {
@@ -86,17 +86,17 @@ static void handle_rx_loopback(
 		atomic_inc(&mempool->out_xmit);
 		dma_addr_array[i] = 0;
 	}
-	ret = fsm_dp_tx(drv, FSM_DP_CH_CONTROL, iov, num, 0, dma_addr_array);
+	ret = fsm_dp_tx(pdev, FSM_DP_CH_CONTROL, iov, num, 0, dma_addr_array);
 	if (ret) {
 		FSM_DP_DEBUG("%s: failed to send response\n", __func__);
-		drv->loopback.stats.rx_err++; /* update error stats */
+		pdev->loopback.stats.rx_err++; /* update error stats */
 		fsm_dp_set_buf_state(msghdr,
 			FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP);
 		atomic_dec(&mempool->out_xmit);
 		goto free_rxbuf;
 	}
 
-	drv->loopback.stats.rx_cnt++;
+	pdev->loopback.stats.rx_cnt++;
 	return;
 
 free_rxbuf:
@@ -105,7 +105,7 @@ free_rxbuf:
 }
 
 static void handle_tx_loopback(
-	struct fsm_dp_drv *drv,
+	struct fsm_dp_dev *pdev,
 	struct fsm_dp_loopback_job *job)
 {
 	struct fsm_dp_mempool *tx_mempool;
@@ -119,9 +119,9 @@ static void handle_tx_loopback(
 	int err = FSM_DP_XMIT_OK;
 
 	p = job->data - sizeof(struct fsm_dp_buf_cntrl);
-	tx_mempool = fsm_dp_get_mempool(drv, p, NULL);
+	tx_mempool = fsm_dp_get_mempool(pdev, p, NULL);
 	if (tx_mempool == NULL) {
-		drv->loopback.stats.tx_drop++;
+		pdev->loopback.stats.tx_drop++;
 		FSM_DP_ERROR("%s: cannot to find source memory pool\n",
 			  __func__);
 		return;
@@ -129,24 +129,24 @@ static void handle_tx_loopback(
 	p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
 
 	if (!fsm_dp_rx_type_is_valid(job->dest)) {
-		drv->loopback.stats.tx_err++;
+		pdev->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: invalid dest %u\n",
 			  __func__, job->dest);
 		err = -EINVAL;
 		goto done_txbuf;
 	}
 
-	rxq = &drv->rxq[job->dest];
+	rxq = &pdev->rxq[job->dest];
 	if (!atomic_read(&rxq->refcnt)) {
-		drv->loopback.stats.tx_drop++;
+		pdev->loopback.stats.tx_drop++;
 		FSM_DP_DEBUG("%s: drop packet\n", __func__);
 		err = -EIO;
 		goto done_txbuf;
 	}
 
-	mempool = drv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
+	mempool = pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	if (mempool == NULL) {
-		drv->loopback.stats.tx_err++;
+		pdev->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: UL memory is not created\n", __func__);
 		err = -EIO;
 		goto done_txbuf;
@@ -154,7 +154,7 @@ static void handle_tx_loopback(
 
 	dst = fsm_dp_mempool_get_buf(mempool, &cluster, &c_offset);
 	if (dst == NULL) {
-		drv->loopback.stats.tx_err++;
+		pdev->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: failed to get buffer\n", __func__);
 		err = -ENOMEM;
 		goto done_txbuf;
@@ -167,14 +167,14 @@ static void handle_tx_loopback(
 	fsm_dp_set_buf_state(dst, FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
 	if (fsm_dp_ring_write(&rxq->ring, offset, 0)) {
-		drv->loopback.stats.tx_err++;
+		pdev->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: rx enqueue failed!\n", __func__);
 		fsm_dp_mempool_put_buf(mempool, dst);
 		err = -EIO;
 		goto done_txbuf;
 	}
 
-	drv->loopback.stats.tx_cnt++;
+	pdev->loopback.stats.tx_cnt++;
 	wake_up(&rxq->wq);
 
 done_txbuf:
@@ -187,8 +187,8 @@ static void loopback_cb(struct work_struct *work)
 {
 	struct fsm_dp_loopback_task *task = container_of(work,
 				struct fsm_dp_loopback_task, work);
-	struct fsm_dp_drv *drv = container_of(task,
-				struct fsm_dp_drv, loopback);
+	struct fsm_dp_dev *pdev = container_of(task,
+				struct fsm_dp_dev, loopback);
 	struct list_head q;
 	struct fsm_dp_loopback_job *job;
 	unsigned long flags;
@@ -214,20 +214,20 @@ static void loopback_cb(struct work_struct *work)
 				iov[num].iov_len = job->length;
 				num++;
 				if (num >= FSM_DP_MAX_IOV_SIZE) {
-					handle_rx_loopback(drv, iov,
+					handle_rx_loopback(pdev, iov,
 						num);
 					num = 0;
 				}
 			} else
-				handle_tx_loopback(drv, job);
+				handle_tx_loopback(pdev, job);
 		}
 	}
 	if (num)
-		handle_rx_loopback(drv, iov, num);
+		handle_rx_loopback(pdev, iov, num);
 }
 
 static int tx_loopback(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	void *data,
 	unsigned int length)
 {
@@ -240,7 +240,7 @@ static int tx_loopback(
 	struct fsm_dp_buf_cntrl *buf_cntrl;
 
 	buf_cntrl = data - sizeof(struct fsm_dp_buf_cntrl);
-	mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, NULL);
+	mempool = fsm_dp_get_mempool(pdev, buf_cntrl, NULL);
 	if (mempool == NULL) {
 		FSM_DP_ERROR("%s: failed find memory pool\n", __func__);
 		return -EINVAL;
@@ -263,7 +263,7 @@ static int tx_loopback(
 		break;
 	}
 
-	task = &pdrv->loopback;
+	task = &pdev->loopback;
 	spin_lock_irqsave(&task->lock, flags);
 	job = list_first_entry_or_null(&task->free_q,
 				       struct fsm_dp_loopback_job,
@@ -290,7 +290,7 @@ static int tx_loopback(
 }
 
 static int rx_loopback(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	void *data,
 	unsigned int length)
 {
@@ -298,7 +298,7 @@ static int rx_loopback(
 	struct fsm_dp_loopback_job *job;
 	unsigned long flags;
 
-	task = &pdrv->loopback;
+	task = &pdev->loopback;
 	spin_lock_irqsave(&task->lock, flags);
 	job = list_first_entry_or_null(&task->free_q,
 				       struct fsm_dp_loopback_job,
@@ -417,7 +417,7 @@ static void fsm_dp_rxqueue_cleanup(struct fsm_dp_rxqueue *rxq)
 	}
 }
 
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length)
+void fsm_dp_rx(struct fsm_dp_dev *pdev, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length)
 {
 	struct fsm_dp_mempool *mempool;
 	struct fsm_dp_rxqueue *rxq;
@@ -425,12 +425,12 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 	unsigned int cl;
 	void *addr = buf_cntrl + 1;
 
-	if (unlikely(pdrv == NULL || addr == NULL || !length)) {
+	if (unlikely(pdev == NULL || addr == NULL || !length)) {
 		FSM_DP_ERROR("%s: invalid argument\n", __func__);
 		return;
 	}
 
-	mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, &cl);
+	mempool = fsm_dp_get_mempool(pdev, buf_cntrl, &cl);
 	if (mempool == NULL) {
 		FSM_DP_ERROR("%s: not UL address, addr=%p\n",
 			  __func__, addr);
@@ -438,7 +438,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 	}
 
 	if (mempool->type == FSM_DP_MEM_TYPE_UL_DATA) {
-		struct fsm_dp_buf_cntrl **p = &pdrv->pending_packets;
+		struct fsm_dp_buf_cntrl **p = &pdev->pending_packets;
 
 		while (*p)
 			p = &((*p)->next_packet);
@@ -448,7 +448,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		return;
 	}
 
-	rxq = &pdrv->rxq[FSM_DP_RX_TYPE_LPBK];
+	rxq = &pdev->rxq[FSM_DP_RX_TYPE_LPBK];
 
 	if (!atomic_read(&rxq->refcnt)) {
 		FSM_DP_DEBUG("%s: rxq not active, drop message\n", __func__);
@@ -465,15 +465,16 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, struct fsm_dp_buf_cntrl *buf_cntrl, unsi
 		goto free_rxbuf;
 	}
 	wake_up(&rxq->wq);
-	pdrv->stats.rx_cnt++;
+	pdev->stats.rx_cnt++;
 	return;
 free_rxbuf:
-	pdrv->stats.rx_drop++;
+	pdev->stats.rx_drop++;
 	fsm_dp_mempool_put_buf(mempool, addr);
 }
 
-int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
+int fsm_dp_rx_init(struct fsm_dp_dev *pdev)
 {
+	struct fsm_dp_drv *pdrv = pdev->pdrv;
 	struct device_node *of_node = pdrv->dev->of_node;
 	const __be32 *of_prop = NULL;
 	const void *prop = NULL;
@@ -496,26 +497,26 @@ int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
 		}
 	}
 
-	pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] = fsm_dp_mempool_alloc(
-		pdrv,
+	pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] = fsm_dp_mempool_alloc(
+		pdev,
 		FSM_DP_MEM_TYPE_UL_CONTROL,
 		fsm_dp_ul_buf_size,
 		fsm_dp_ul_buf_cnt,
 		false); /* no dma map yet since io dev is not ready */
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
+	if (pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
 		FSM_DP_ERROR("%s: failed to allocate UL_CONTROL memory pool!\n",
 				  __func__);
 		return -ENOMEM;
 	}
 
 	/* TODO: use different buf_size & cnt for UL_DATA */
-	pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA] = fsm_dp_mempool_alloc(
-		pdrv,
+	pdev->mempool[FSM_DP_MEM_TYPE_UL_DATA] = fsm_dp_mempool_alloc(
+		pdev,
 		FSM_DP_MEM_TYPE_UL_DATA,
 		fsm_dp_ul_buf_size,
 		fsm_dp_ul_buf_cnt,
 		false); /* no dma map yet since io dev is not ready */
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA] == NULL) {
+	if (pdev->mempool[FSM_DP_MEM_TYPE_UL_DATA] == NULL) {
 		FSM_DP_ERROR("%s: failed to allocate UL_DATA memory pool!\n",
 				  __func__);
 		return -ENOMEM;
@@ -526,7 +527,7 @@ int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
 	if (prop && len == (sizeof(unsigned int) * FSM_DP_RX_TYPE_LAST))
 		of_prop = prop;
 	for (type = 0; type < FSM_DP_RX_TYPE_LAST; type++) {
-		ret = fsm_dp_rxqueue_init(&pdrv->rxq[type], type,
+		ret = fsm_dp_rxqueue_init(&pdev->rxq[type], type,
 			(of_prop) ?
 			be32_to_cpu(of_prop[type]) :
 			DEFAULT_RX_QUEUE_SIZE);
@@ -539,17 +540,17 @@ int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
 	return 0;
 }
 
-static void fsm_dp_rx_cleanup(struct fsm_dp_drv *pdrv)
+static void fsm_dp_rx_cleanup(struct fsm_dp_dev *pdev)
 {
 	unsigned int type;
 
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL])
-		fsm_dp_mempool_free(pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL]);
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA])
-		fsm_dp_mempool_free(pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA]);
+	if (pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL])
+		fsm_dp_mempool_free(pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL]);
+	if (pdev->mempool[FSM_DP_MEM_TYPE_UL_DATA])
+		fsm_dp_mempool_free(pdev->mempool[FSM_DP_MEM_TYPE_UL_DATA]);
 
 	for (type = 0; type < FSM_DP_RX_TYPE_LAST; type++)
-		fsm_dp_rxqueue_cleanup(&pdrv->rxq[type]);
+		fsm_dp_rxqueue_cleanup(&pdev->rxq[type]);
 }
 
 int fsm_dp_rel_rx_buf(
@@ -563,7 +564,7 @@ int fsm_dp_rel_rx_buf(
 
 	if (!preg || !preg->pdrv)
 		return -EINVAL;
-	mempool = preg->pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
+	mempool = preg->pdrv->dp_devs[0].mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	if (!mempool)
 		return -EINVAL;
 	fsm_dp_mempool_put_buf(mempool, buf);
@@ -638,22 +639,22 @@ int fsm_dp_tx_skb(
 	msghdr->reserved = 0;
 	msghdr->aggr = 0;
 	msghdr->version = FSM_DP_MSG_HDR_VERSION;
-	msghdr->sequence = atomic_inc_return(&preg->pdrv->tx_seqnum);
+	msghdr->sequence = atomic_inc_return(&preg->pdrv->dp_devs[0].tx_seqnum);
 	msghdr->length = plen;
 
-	spin_lock_bh(&preg->pdrv->mhi_control_dev.tx_lock);
-	ret = fsm_dp_mhi_skb_ul_xfer(&preg->pdrv->mhi_control_dev, skb);
+	spin_lock_bh(&preg->pdrv->dp_devs[0].mhi_control_dev.tx_lock);
+	ret = fsm_dp_mhi_skb_ul_xfer(&preg->pdrv->dp_devs[0].mhi_control_dev, skb);
 	if (ret)
-		preg->pdrv->stats.tx_err++;
+		preg->pdrv->dp_devs[0].stats.tx_err++;
 	else
-		preg->pdrv->stats.tx_cnt++;
-	spin_unlock_bh(&preg->pdrv->mhi_control_dev.tx_lock);
+		preg->pdrv->dp_devs[0].stats.tx_cnt++;
+	spin_unlock_bh(&preg->pdrv->dp_devs[0].mhi_control_dev.tx_lock);
 	return ret;
 }
 EXPORT_SYMBOL(fsm_dp_tx_skb);
 
 int fsm_dp_tx(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	enum fsm_dp_channel ch,
 	struct iovec *iov,
 	unsigned int iov_nr,
@@ -665,29 +666,29 @@ int fsm_dp_tx(
 	int j;
 	struct fsm_dp_mhi *mhi;
 
-	if (unlikely(!pdrv || !iov || !iov_nr))
+	if (unlikely(!pdev || !iov || !iov_nr))
 		return -EINVAL;
 
-	mhi = get_dp_mhi(pdrv, ch);
+	mhi = get_dp_mhi(pdev, ch);
 
 	ret = 0;
 	if (unlikely(flag & FSM_DP_TX_FLAG_LOOPBACK)) {
 		for (n = 0; n < iov_nr; n++) {
-			ret = tx_loopback(pdrv,
+			ret = tx_loopback(pdev,
 					  iov[n].iov_base,
 					  iov[n].iov_len);
 			if (ret) {
-				pdrv->stats.tx_err++;
+				pdev->stats.tx_err++;
 				return ret;
 			}
-			pdrv->stats.tx_cnt++;
+			pdev->stats.tx_cnt++;
 		}
 		return 0;
 	}
 
 	if (!fsm_dp_mhi_is_ready(mhi)) {
 		FSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
-		pdrv->stats.tx_err++;
+		pdev->stats.tx_err++;
 		return -EIO;
 	}
 
@@ -707,7 +708,7 @@ int fsm_dp_tx(
 			struct fsm_dp_buf_cntrl *buf_cntrl;
 
 			buf_cntrl = iov[n].iov_base - sizeof(struct fsm_dp_buf_cntrl);
-			mempool = fsm_dp_get_mempool(pdrv, buf_cntrl, NULL);
+			mempool = fsm_dp_get_mempool(pdev, buf_cntrl, NULL);
 			if (mempool == NULL) {
 				FSM_DP_ERROR("%s: fsm_dp_get_mempool failed addr=0x%p\n",
 					     __func__, iov[n].iov_base);
@@ -729,7 +730,7 @@ int fsm_dp_tx(
 			msghdr->version = FSM_DP_MSG_HDR_VERSION;
 			msghdr->type = FSM_DP_MSG_TYPE_LPBK_REQ;
 			msghdr->length = iov[n].iov_len;
-			msghdr->sequence = atomic_inc_return(&pdrv->tx_seqnum);
+			msghdr->sequence = atomic_inc_return(&pdev->tx_seqnum);
 
 			iov[n].iov_len += sizeof(*msghdr);
 		}
@@ -774,48 +775,48 @@ int fsm_dp_tx(
 		}
 		ret = fsm_dp_mhi_n_tx(mhi, num);
 		if (ret) {
-			pdrv->stats.tx_err++;
+			pdev->stats.tx_err++;
 			break;
 		}
 		to_send -= num;
 	}
 
 	if (!(flag & FSM_DP_TX_FLAG_SG))
-		pdrv->stats.tx_cnt += (iov_nr - to_send);
+		pdev->stats.tx_cnt += (iov_nr - to_send);
 	else if (!to_send)
-		pdrv->stats.tx_cnt++;
+		pdev->stats.tx_cnt++;
 	spin_unlock_bh(&mhi->tx_lock);
 	return ret;
 }
 
-int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr)
+int fsm_dp_rx_poll(struct fsm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 {
 	int ret;
 	struct fsm_dp_buf_cntrl *cur_packet;
 	size_t n = 0, remain = iov_nr;
 
-	if (!fsm_dp_mhi_is_ready(&pdrv->mhi_data_dev))
+	if (!fsm_dp_mhi_is_ready(&pdev->mhi_data_dev))
 		return 0;
 
 	/*
 	 * poll to get packets from MHI. This will cause dl_xfer (RX callback) to get called which
 	 * will then link the Rx packets into pdrv->pending_packets
 	 */
-	ret = mhi_poll(pdrv->mhi_data_dev.mhi_dev, FSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
+	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, FSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
 	if (ret < 0)
 		pr_err("Error rx polling %d\n", ret);
 
-	ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_data_dev);
+	ret = fsm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
 		pr_err("Error rx replenish %d\n", ret);
 
 	/* fill iov with the received packets */
-	cur_packet = pdrv->pending_packets;
+	cur_packet = pdev->pending_packets;
 	while (cur_packet) {
 		struct fsm_dp_buf_cntrl *cur_buf, *tmp;
 
 		if (cur_packet->buf_count > remain) {
-			if (cur_packet == pdrv->pending_packets)
+			if (cur_packet == pdev->pending_packets)
 				return -EINVAL;	/* provided iov is too short even for 1st packet */
 			/* no more room in iov, we're done */
 			break;
@@ -823,7 +824,7 @@ int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr)
 
 		for (cur_buf = cur_packet; cur_buf; cur_buf = cur_buf->next) {
 			unsigned int cl;
-			struct fsm_dp_mempool *mempool = pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA];
+			struct fsm_dp_mempool *mempool = pdev->mempool[FSM_DP_MEM_TYPE_UL_DATA];
 
 			FSM_DP_ASSERT(mempool == NULL, "not UL address\n");
 
@@ -840,29 +841,87 @@ int fsm_dp_rx_poll(struct fsm_dp_drv *pdrv, struct iovec *iov, size_t iov_nr)
 		tmp->next_packet = NULL;
 	}
 
-	pdrv->pending_packets = cur_packet;
+	pdev->pending_packets = cur_packet;
 
 	return n;
+}
+
+/* napi function to replenish control channel */
+static int fsm_dp_poll(struct napi_struct *napi, int budget)
+{
+	int rx_work = 0;
+	struct fsm_dp_dev *pdev;
+	int ret;
+
+	pdev = container_of(napi, struct fsm_dp_dev, napi);
+	rx_work = mhi_poll(pdev->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);
+	if (rx_work < 0) {
+		rx_work = 0;
+		pr_err("Error polling ret:%d\n", rx_work);
+		napi_complete(napi);
+		goto exit_poll;
+	}
+
+	ret = fsm_dp_mhi_rx_replenish(&pdev->mhi_control_dev);
+	if (ret == -ENOMEM)
+		schedule_work(&pdev->alloc_work);  /* later */
+	if (rx_work < budget)
+		napi_complete(napi);
+	else
+		pdev->stats.rx_budget_overflow++;
+exit_poll:
+	return rx_work;
+}
+
+/* worker function to replenish control channel, in case replenish failed in napi function */
+static void fsm_dp_alloc_work(struct work_struct *work)
+{
+	struct fsm_dp_dev *pdev;
+	const int sleep_ms =  1000;
+	int retry = 60;
+	int ret;
+
+	pdev = container_of(work, struct fsm_dp_dev, alloc_work);
+
+	do {
+		ret = fsm_dp_mhi_rx_replenish(&pdev->mhi_control_dev);
+		/* sleep and try again */
+		if (ret == -ENOMEM) {
+			msleep(sleep_ms);
+			retry--;
+		}
+	} while (ret == -ENOMEM && retry);
 }
 
 static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 {
 	struct device *dev = pdrv->dev;
-	int ret;
-
-	mutex_init(&pdrv->mempool_lock);
+	int ret, i;
 
 	of_dma_configure(dev, dev->of_node, true);
 
-	ret = fsm_dp_rx_init(pdrv);
-	if (ret)
-		goto exit;
+	for (i = 0; i < FSM_DP_MAX_NUM_DEVS; i++) {
+		struct fsm_dp_dev *pdev = &pdrv->dp_devs[i];
 
-	ret = fsm_dp_loopback_init(&pdrv->loopback);
-	if (ret)
-		goto exit;
+		pdev->pdrv = pdrv;
+		mutex_init(&pdev->mempool_lock);
+		init_dummy_netdev(&pdev->dummy_dev);
+		netif_napi_add(&pdev->dummy_dev, &pdev->napi, fsm_dp_poll,
+							FSM_DP_NAPI_WEIGHT);
+		napi_enable(&pdev->napi);
+		INIT_WORK(&pdev->alloc_work, fsm_dp_alloc_work);
 
-	ret = fsm_dp_test_init(pdrv);
+		ret = fsm_dp_rx_init(pdev);
+		if (ret)
+			goto exit;
+
+		ret = fsm_dp_loopback_init(&pdev->loopback);
+		if (ret)
+			goto exit;
+
+		ret = fsm_dp_test_init(pdev);
+	}
+
 
 exit:
 	of_node_put(dev->of_node);
@@ -871,57 +930,21 @@ exit:
 
 static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 {
-	fsm_dp_rx_cleanup(pdrv);
-	fsm_dp_loopback_cleanup(&pdrv->loopback);
-	fsm_dp_test_cleanup(pdrv);
-	kfree(pdrv);
-}
+	int i;
 
-/* napi function to replenish control channel */
-static int fsm_dp_poll(struct napi_struct *napi, int budget)
-{
-	int rx_work = 0;
-	struct fsm_dp_drv *pdrv;
-	int ret;
+	for (i = 0; i < FSM_DP_MAX_NUM_DEVS; i++) {
+		struct fsm_dp_dev *pdev = &pdrv->dp_devs[i];
 
-	pdrv = container_of(napi, struct fsm_dp_drv, napi);
-	rx_work = mhi_poll(pdrv->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);
-	if (rx_work < 0) {
-		rx_work = 0;
-		pr_err("Error polling ret:%d\n", rx_work);
-		napi_complete(napi);
-		goto exit_poll;
+		flush_work(&pdev->alloc_work);
+		napi_disable(&pdev->napi);
+		netif_napi_del(&pdev->napi);
+
+		fsm_dp_rx_cleanup(pdev);
+		fsm_dp_loopback_cleanup(&pdev->loopback);
+		fsm_dp_test_cleanup(pdev);
 	}
 
-	ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_control_dev);
-	if (ret == -ENOMEM)
-		schedule_work(&pdrv->alloc_work);  /* later */
-	if (rx_work < budget)
-		napi_complete(napi);
-	else
-		pdrv->stats.rx_budget_overflow++;
-exit_poll:
-	return rx_work;
-}
-
-/* worker function to replenish control channel, in case replenish failed in napi function */
-static void fsm_dp_alloc_work(struct work_struct *work)
-{
-	struct fsm_dp_drv *pdrv;
-	const int sleep_ms =  1000;
-	int retry = 60;
-	int ret;
-
-	pdrv = container_of(work, struct fsm_dp_drv, alloc_work);
-
-	do {
-		ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_control_dev);
-		/* sleep and try again */
-		if (ret == -ENOMEM) {
-			msleep(sleep_ms);
-			retry--;
-		}
-	} while (ret == -ENOMEM && retry);
+	kfree(pdrv);
 }
 
 static int fsm_dp_probe(struct platform_device *pdev)
@@ -942,33 +965,27 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	if (ret)
 		goto cleanup;
 
-	ret = fsm_dp_mhi_init(pdrv);
-	if (ret)
-		goto cleanup;
-
 	ret = fsm_dp_cdev_init(pdrv);
 	if (ret)
-		goto cleanup_mhi;
+		goto cleanup;
 
 	ret = fsm_dp_debugfs_init(pdrv);
 	if (ret)
 		goto cleanup_cdev;
 
-	platform_set_drvdata(pdev, pdrv);
+	ret = fsm_dp_mhi_init(pdrv);
+	if (ret)
+		goto cleanup_debugfs;
 
-	init_dummy_netdev(&pdrv->dummy_dev);
-	netif_napi_add(&pdrv->dummy_dev, &pdrv->napi, fsm_dp_poll,
-						FSM_DP_NAPI_WEIGHT);
-	napi_enable(&pdrv->napi);
-	INIT_WORK(&pdrv->alloc_work, fsm_dp_alloc_work);
+	platform_set_drvdata(pdev, pdrv);
 
 	pr_info("FSM-DP: module initialized now\n");
 	return 0;
 
+cleanup_debugfs:
+	fsm_dp_debugfs_cleanup(pdrv);
 cleanup_cdev:
 	fsm_dp_cdev_cleanup(pdrv);
-cleanup_mhi:
-	fsm_dp_mhi_cleanup(pdrv);
 cleanup:
 	fsm_dp_core_cleanup(pdrv);
 	fsm_dp_pdrv = NULL;
@@ -981,11 +998,8 @@ static int fsm_dp_remove(struct platform_device *pdev)
 	struct fsm_dp_drv *pdrv = platform_get_drvdata(pdev);
 
 	if (pdrv) {
-		flush_work(&pdrv->alloc_work);
-		napi_disable(&pdrv->napi);
-		netif_napi_del(&pdrv->napi);
-		fsm_dp_cdev_cleanup(pdrv);
 		fsm_dp_mhi_cleanup(pdrv);
+		fsm_dp_cdev_cleanup(pdrv);
 		fsm_dp_debugfs_cleanup(pdrv);
 		fsm_dp_core_cleanup(pdrv);
 	}

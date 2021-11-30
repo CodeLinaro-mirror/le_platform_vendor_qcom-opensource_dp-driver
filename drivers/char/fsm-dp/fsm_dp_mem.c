@@ -133,12 +133,12 @@ static inline void __buf_mem_free(struct fsm_dp_mem_loc *loc)
  * get the MHI controller dev - needed for dma operations. Control and data
  * channels refer to same MHI controller dev.
  */
-struct device *get_mhi_cntrl_dev(struct fsm_dp_drv *pdrv)
+struct device *get_mhi_cntrl_dev(struct fsm_dp_dev *pdev)
 {
-	if (fsm_dp_mhi_is_ready(&pdrv->mhi_control_dev))
-		return pdrv->mhi_control_dev.mhi_dev->mhi_cntrl->cntrl_dev;
-	else if (fsm_dp_mhi_is_ready(&pdrv->mhi_data_dev))
-		return pdrv->mhi_data_dev.mhi_dev->mhi_cntrl->cntrl_dev;
+	if (fsm_dp_mhi_is_ready(&pdev->mhi_control_dev))
+		return pdev->mhi_control_dev.mhi_dev->mhi_cntrl->cntrl_dev;
+	else if (fsm_dp_mhi_is_ready(&pdev->mhi_data_dev))
+		return pdev->mhi_data_dev.mhi_dev->mhi_cntrl->cntrl_dev;
 
 	return NULL;
 }
@@ -431,7 +431,7 @@ static int fsm_dp_mem_init(
 static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 {
 	struct fsm_dp_mempool *mempool = fsm_dp_mem_to_mempool(mem);
-	struct fsm_dp_drv *pdrv = mempool->drv;
+	struct fsm_dp_dev *pdev = mempool->dp_dev;
 	int i;
 	unsigned int size;
 
@@ -441,13 +441,13 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 		for (i = 0; i < mem->loc.num_cluster; i++) {
 			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
-					get_mhi_cntrl_dev(pdrv),
+					get_mhi_cntrl_dev(pdev),
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
 			} else {
 				dma_unmap_single(
-					get_mhi_cntrl_dev(pdrv),
+					get_mhi_cntrl_dev(pdev),
 					mem->loc.cluster_dma_addr[i],
 					FSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
@@ -533,7 +533,7 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 }
 
 static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	enum fsm_dp_mem_type type,
 	unsigned int buf_sz,
 	unsigned int buf_cnt,
@@ -549,7 +549,7 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 		return NULL;
 	}
 
-	mempool->drv = pdrv;
+	mempool->dp_dev = pdev;
 	mempool->type = type;
 	mempool->signature = FSM_DP_MEMPOOL_SIG;
 
@@ -572,7 +572,7 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	}
 
 	if (may_map) {
-		struct device *dev = get_mhi_cntrl_dev(pdrv);
+		struct device *dev = get_mhi_cntrl_dev(pdev);
 
 		if (dev && fsm_dp_mempool_dma_map(dev, mempool))
 			goto cleanup_mem;
@@ -683,7 +683,7 @@ error:
 }
 
 struct fsm_dp_mempool *fsm_dp_mempool_alloc(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	enum fsm_dp_mem_type type,
 	unsigned int buf_sz,
 	unsigned int buf_cnt,
@@ -707,8 +707,8 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	if (unlikely(!ring_sz))
 		return NULL;
 
-	mutex_lock(&pdrv->mempool_lock);
-	mempool = pdrv->mempool[type];
+	mutex_lock(&pdev->mempool_lock);
+	mempool = pdev->mempool[type];
 	if (mempool) {
 		if (!fsm_dp_mem_type_is_ul(type) &&
 			(buf_sz > mempool->mem.buf_sz ||
@@ -722,36 +722,36 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 		goto mempool_hold;
 	}
 
-	mempool = __fsm_dp_mempool_alloc(pdrv, type, buf_sz,
+	mempool = __fsm_dp_mempool_alloc(pdev, type, buf_sz,
 					buf_cnt, ring_sz, may_dma_map);
 	if (mempool == NULL)
 		goto done;
 	atomic_set(&mempool->ref, 1);
 	atomic_set(&mempool->out_xmit, 0);
 	spin_lock_init(&mempool->lock);
-	pdrv->mempool[type] = mempool;
+	pdev->mempool[type] = mempool;
 	goto done;
 mempool_hold:
 	if (!fsm_dp_mempool_hold(mempool))
 		mempool = NULL;
 done:
-	mutex_unlock(&pdrv->mempool_lock);
+	mutex_unlock(&pdev->mempool_lock);
 	return mempool;
 }
 
 void fsm_dp_mempool_free(struct fsm_dp_mempool *mempool)
 {
-	struct fsm_dp_drv *pdrv = mempool->drv;
+	struct fsm_dp_dev *pdev = mempool->dp_dev;
 
 	if (!mempool)
 		return;
 	fsm_dp_mempool_release_no_delay(mempool);
-	pdrv->mempool[mempool->type] = NULL;
+	pdev->mempool[mempool->type] = NULL;
 	wmb();
 	return;
 }
 
-void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv)
+void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev)
 {
 	struct fsm_dp_mempool *mempool;
 	int i;
@@ -761,7 +761,7 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv)
 
 
 	for (j = 0; j < FSM_DP_MEM_TYPE_LAST; j++) {
-		mempool = pdrv->mempool[j];
+		mempool = pdev->mempool[j];
 		if (!mempool)
 			continue;
 		if (!spin_trylock(&mempool->lock))
@@ -772,13 +772,13 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv)
 			for (i = 0; i < mem->loc.num_cluster; i++) {
 				if (i ==  mem->loc.num_cluster - 1) {
 					dma_unmap_single(
-						get_mhi_cntrl_dev(pdrv),
+						get_mhi_cntrl_dev(pdev),
 						mem->loc.cluster_dma_addr[i],
 						size,
 						mem->loc.direction);
 				} else {
 					dma_unmap_single(
-						get_mhi_cntrl_dev(pdrv),
+						get_mhi_cntrl_dev(pdev),
 						mem->loc.cluster_dma_addr[i],
 						FSM_DP_MEMPOOL_CLUSTER_SIZE,
 						mem->loc.direction);
@@ -916,7 +916,7 @@ void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
 }
 
 struct fsm_dp_mempool *fsm_dp_get_mempool(
-	struct fsm_dp_drv *pdrv,
+	struct fsm_dp_dev *pdev,
 	struct fsm_dp_buf_cntrl *buf_cntrl,
 	unsigned int *cluster)
 {
@@ -925,7 +925,7 @@ struct fsm_dp_mempool *fsm_dp_get_mempool(
 	if (!fsm_dp_mem_type_is_valid(buf_cntrl->mem_type))
 		return NULL;
 
-	mempool = pdrv->mempool[buf_cntrl->mem_type];
+	mempool = pdev->mempool[buf_cntrl->mem_type];
 	if (!mempool)
 		return NULL;
 
@@ -945,24 +945,24 @@ uint16_t fsm_dp_mem_get_cluster(struct fsm_dp_mem *mem, unsigned int buf_index)
 }
 
 #define FSM_DP_SYNC_THRESHOLD 4
-bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
+bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_dev *pdev)
 {
-	struct fsm_dp_mempool *mempool = pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
+	struct fsm_dp_mempool *mempool = pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	struct fsm_dp_ring *ring = &mempool->ring;
 
-	if (*ring->prod_tail != pdrv->fsm_dp_prev_ul_prod_tail) {
-		pdrv->fsm_dp_outbuf_drop_sync = 0;
-		pdrv->fsm_dp_prev_ul_prod_tail = *ring->prod_tail;
+	if (*ring->prod_tail != pdev->fsm_dp_prev_ul_prod_tail) {
+		pdev->fsm_dp_outbuf_drop_sync = 0;
+		pdev->fsm_dp_prev_ul_prod_tail = *ring->prod_tail;
 		return false;
 	}
-	if (pdrv->fsm_dp_outbuf_drop_sync++ >= FSM_DP_SYNC_THRESHOLD) {
+	if (pdev->fsm_dp_outbuf_drop_sync++ >= FSM_DP_SYNC_THRESHOLD) {
 
 		if (*ring->prod_tail != *ring->prod_head) {
 			pr_warn("%s prod head %d prod tail %d\n", __func__,
 				*ring->prod_head, *ring->prod_tail);
 			*ring->prod_tail = *ring->prod_head;
 			wmb();
-			pdrv->fsm_dp_outbuf_drop_sync = 0;
+			pdev->fsm_dp_outbuf_drop_sync = 0;
 			return true;
 		}
 	}
