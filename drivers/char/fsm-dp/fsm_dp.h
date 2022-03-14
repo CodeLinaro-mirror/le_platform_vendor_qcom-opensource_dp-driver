@@ -176,7 +176,8 @@ struct fsm_dp_core_stats {
 struct fsm_dp_drv {
 	struct device *dev;
 	struct class *dev_class;
-	struct fsm_dp_mhi mhi;
+	struct fsm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
+	struct fsm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
 	struct cdev cdev;
 	struct net_device dummy_dev;
 	struct napi_struct napi;
@@ -192,7 +193,6 @@ struct fsm_dp_drv {
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
 
-	struct fsm_dp_buf_cntrl *rx_head_buf_cntrl, *rx_tail_buf_cntrl;
 
 #ifdef CONFIG_FSM_DP_TEST
 	struct fsm_dp_test_ring test_ring;
@@ -216,6 +216,7 @@ void fsm_dp_debugfs_cleanup(struct fsm_dp_drv *pdrv);
 
 int fsm_dp_tx(
 	struct fsm_dp_drv *pdrv,
+	enum fsm_dp_channel ch,
 	struct iovec *iov,
 	unsigned int iov_nr,
 	unsigned int flag,

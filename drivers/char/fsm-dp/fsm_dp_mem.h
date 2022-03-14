@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -171,9 +171,8 @@ struct fsm_dp_mempool *fsm_dp_find_mempool(
 	unsigned int *cluster);
 
 int fsm_dp_mempool_dma_map(
-	struct fsm_dp_drv *pdrv,
-	struct fsm_dp_mempool *mpool,
-	enum fsm_dp_mem_type type);
+	struct device *dev,	/* device for iommu ops */
+	struct fsm_dp_mempool *mpool);
 
 bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv);
 

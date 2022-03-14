@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -607,8 +607,7 @@ DEFINE_DEBUGFS_OPS(debugfs_mempool_info, debugfs_mempool_info_show, NULL);
 
 static int debugfs_mhi_show(struct seq_file *s, void *unused)
 {
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
-	struct fsm_dp_mhi *mhi = &drv->mhi;
+	struct fsm_dp_mhi *mhi = (struct fsm_dp_mhi *)s->private;
 
 	seq_printf(s, "MHIDevice:              %llx\n", (u64) mhi->mhi_dev);
 	seq_puts(s, "Stats:\n");
@@ -905,7 +904,12 @@ int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 	if (!entry)
 		goto err;
 
-	entry = debugfs_create_file("mhi", 0444, __dent, drv,
+	entry = debugfs_create_file("mhi_control_dev", 0444, __dent, &drv->mhi_control_dev,
+				    &debugfs_mhi_ops);
+	if (!entry)
+		goto err;
+
+	entry = debugfs_create_file("mhi_data_dev", 0444, __dent, &drv->mhi_data_dev,
 				    &debugfs_mhi_ops);
 	if (!entry)
 		goto err;

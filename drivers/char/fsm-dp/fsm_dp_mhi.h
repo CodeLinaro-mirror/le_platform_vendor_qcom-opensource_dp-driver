@@ -35,26 +35,29 @@ struct fsm_dp_mhi_stats {
 	unsigned long rx_resync;
 };
 
+/* represents MHI channel pair - Tx and Rx */
 struct fsm_dp_mhi {
 	struct mhi_device *mhi_dev;
 	struct fsm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	spinlock_t tx_lock;
+	bool mhi_destroyed;	/* TODO: remove? */
 	/*
 	 * the following are for needed storage
 	 * for mhi_queue_n_transfer.
 	 */
-	bool mhi_destroyed;
 	enum mhi_flags ul_flag_array[FSM_DP_MAX_IOV_SIZE];
 	enum mhi_flags dl_flag_array[FSM_DP_MAX_IOV_SIZE];
 	struct mhi_buf dl_buf_array[FSM_DP_MAX_IOV_SIZE];
 	struct mhi_buf ul_buf_array[FSM_DP_MAX_IOV_SIZE];
+
+	struct fsm_dp_buf_cntrl *rx_head_buf_cntrl, *rx_tail_buf_cntrl;
 };
 
 int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv);
 
-int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv);
+int fsm_dp_mhi_rx_replenish(struct fsm_dp_mhi *mhi);
 
 static inline int fsm_dp_mhi_skb_ul_xfer(
 	struct fsm_dp_mhi *mhi, struct sk_buff *skb)

@@ -88,6 +88,7 @@ static struct fsm_dp_mempool_vma *find_mempool_vma(
 
 static int __cdev_tx(
 	struct fsm_dp_cdev *cdev,
+	enum fsm_dp_channel ch,
 	struct iovec __user *uiov,
 	unsigned int iov_nr,
 	bool sg)
@@ -205,7 +206,7 @@ static int __cdev_tx(
 	if (cdev->tx_mode == TX_MODE_LOOPBACK)
 		flag |= FSM_DP_TX_FLAG_LOOPBACK;
 
-	ret = fsm_dp_tx(pdrv, iov, iov_nr, flag, dma_addr);
+	ret = fsm_dp_tx(pdrv, ch, iov, iov_nr, flag, dma_addr);
 
 	if (ret) {
 #ifdef FSM_DP_BUFFER_FENCING
@@ -284,31 +285,31 @@ static int __cdev_ioctl_mempool_getcfg(
 
 static int __cdev_ioctl_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 {
-	struct iovec iov;
+	struct fsm_dp_ioctl_tx arg;
 	int ret;
 
-	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
+	if (copy_from_user(&arg, (void __user *)ioarg, sizeof(arg)))
 		return -EFAULT;
 
-	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
+	if (!arg.iov.iov_len || arg.iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false);
+	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, false);
 	return ret;
 }
 
 static int __cdev_ioctl_sg_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 {
-	struct iovec iov;
+	struct fsm_dp_ioctl_tx arg;
 	int ret;
 
-	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
+	if (copy_from_user(&arg, (void __user *)ioarg, sizeof(arg)))
 		return -EFAULT;
 
-	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
+	if (!arg.iov.iov_len || arg.iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true);
+	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, true);
 	return ret;
 }
 

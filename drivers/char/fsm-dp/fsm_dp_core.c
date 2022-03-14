@@ -56,6 +56,19 @@ static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
 }
 #endif
 
+static struct fsm_dp_mhi *get_dp_mhi(struct fsm_dp_drv *drv, enum fsm_dp_channel ch)
+{
+	switch (ch) {
+	case FSM_DP_CH_CONTROL:
+		return &drv->mhi_control_dev;
+	case FSM_DP_CH_DATA:
+		return &drv->mhi_data_dev;
+	default:
+		FSM_DP_ASSERT(0, "invalid ch");
+		return NULL;
+	}
+}
+
 static void handle_rx_loopback(
 	struct fsm_dp_drv *drv,
 	struct iovec *iov,
@@ -64,7 +77,7 @@ static void handle_rx_loopback(
 	struct fsm_dp_msghdr *msghdr;
 	int ret;
 	int i;
-	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
+	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	dma_addr_t dma_addr_array[FSM_DP_MAX_IOV_SIZE];
 
 	for (i = 0; i < num; i++) {
@@ -74,7 +87,7 @@ static void handle_rx_loopback(
 		atomic_inc(&mempool->out_xmit);
 		dma_addr_array[i] = 0;
 	}
-	ret = fsm_dp_tx(drv, iov, num, 0, dma_addr_array);
+	ret = fsm_dp_tx(drv, FSM_DP_CH_CONTROL, iov, num, 0, dma_addr_array);
 	if (ret) {
 		FSM_DP_DEBUG("%s: failed to send response\n", __func__);
 		drv->loopback.stats.rx_err++; /* update error stats */
@@ -135,7 +148,7 @@ static void handle_tx_loopback(
 		goto done_txbuf;
 	}
 
-	mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
+	mempool = drv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	if (mempool == NULL) {
 		drv->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: UL memory is not created\n", __func__);
@@ -475,14 +488,27 @@ int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
 		}
 	}
 
-	pdrv->mempool[FSM_DP_MEM_TYPE_UL] = fsm_dp_mempool_alloc(
+	pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] = fsm_dp_mempool_alloc(
 		pdrv,
-		FSM_DP_MEM_TYPE_UL,
+		FSM_DP_MEM_TYPE_UL_CONTROL,
 		fsm_dp_ul_buf_size,
 		fsm_dp_ul_buf_cnt,
 		false); /* no dma map yet since io dev is not ready */
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL] == NULL) {
-		FSM_DP_ERROR("%s: failed to allocate UL memory pool!\n",
+	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
+		FSM_DP_ERROR("%s: failed to allocate UL_CONTROL memory pool!\n",
+				  __func__);
+		return -ENOMEM;
+	}
+
+	// TODO: use different buf_size & cnt for UL_DATA
+	pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA] = fsm_dp_mempool_alloc(
+		pdrv,
+		FSM_DP_MEM_TYPE_UL_DATA,
+		fsm_dp_ul_buf_size,
+		fsm_dp_ul_buf_cnt,
+		false); /* no dma map yet since io dev is not ready */
+	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA] == NULL) {
+		FSM_DP_ERROR("%s: failed to allocate UL_DATA memory pool!\n",
 				  __func__);
 		return -ENOMEM;
 	}
@@ -509,8 +535,10 @@ static void fsm_dp_rx_cleanup(struct fsm_dp_drv *pdrv)
 {
 	unsigned int type;
 
-	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL])
-		fsm_dp_mempool_free(pdrv->mempool[FSM_DP_MEM_TYPE_UL]);
+	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL])
+		fsm_dp_mempool_free(pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL]);
+	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA])
+		fsm_dp_mempool_free(pdrv->mempool[FSM_DP_MEM_TYPE_UL_DATA]);
 
 	for (type = 0; type < FSM_DP_RX_TYPE_LAST; type++)
 		fsm_dp_rxqueue_cleanup(&pdrv->rxq[type]);
@@ -527,7 +555,7 @@ int fsm_dp_rel_rx_buf(
 
 	if (!preg || !preg->pdrv)
 		return -EINVAL;
-	mempool = preg->pdrv->mempool[FSM_DP_MEM_TYPE_UL];
+	mempool = preg->pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	if (!mempool)
 		return -EINVAL;
 	fsm_dp_mempool_put_buf(mempool, buf);
@@ -605,19 +633,20 @@ int fsm_dp_tx_skb(
 	msghdr->sequence = atomic_inc_return(&preg->pdrv->tx_seqnum);
 	msghdr->length = plen;
 
-	spin_lock_bh(&preg->pdrv->mhi.tx_lock);
-	ret = fsm_dp_mhi_skb_ul_xfer(&preg->pdrv->mhi, skb);
+	spin_lock_bh(&preg->pdrv->mhi_control_dev.tx_lock);
+	ret = fsm_dp_mhi_skb_ul_xfer(&preg->pdrv->mhi_control_dev, skb);
 	if (ret)
 		preg->pdrv->stats.tx_err++;
 	else
 		preg->pdrv->stats.tx_cnt++;
-	spin_unlock_bh(&preg->pdrv->mhi.tx_lock);
+	spin_unlock_bh(&preg->pdrv->mhi_control_dev.tx_lock);
 	return ret;
 }
 EXPORT_SYMBOL(fsm_dp_tx_skb);
 
 int fsm_dp_tx(
 	struct fsm_dp_drv *pdrv,
+	enum fsm_dp_channel ch,
 	struct iovec *iov,
 	unsigned int iov_nr,
 	unsigned int flag,
@@ -626,9 +655,12 @@ int fsm_dp_tx(
 	int ret, n;
 	unsigned int num, to_send;
 	int j;
+	struct fsm_dp_mhi *mhi;
 
 	if (unlikely(!pdrv || !iov || !iov_nr))
 		return -EINVAL;
+
+	mhi = get_dp_mhi(pdrv, ch);
 
 	ret = 0;
 	if (unlikely(flag & FSM_DP_TX_FLAG_LOOPBACK)) {
@@ -645,7 +677,7 @@ int fsm_dp_tx(
 		return 0;
 	}
 
-	if (!fsm_dp_mhi_is_ready(&pdrv->mhi)) {
+	if (!fsm_dp_mhi_is_ready(mhi)) {
 		FSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
 		pdrv->stats.tx_err++;
 		return -EIO;
@@ -698,7 +730,7 @@ int fsm_dp_tx(
 			msghdr->length += total_len;
 	}
 
-	spin_lock_bh(&pdrv->mhi.tx_lock);
+	spin_lock_bh(&mhi->tx_lock);
 	to_send = 0;
 	for (n = 0, to_send = iov_nr; to_send > 0; ) {
 		if (to_send > FSM_DP_MAX_IOV_SIZE)
@@ -707,30 +739,29 @@ int fsm_dp_tx(
 			num = to_send;
 		for (j = 0; j < num; j++) {
 			if ((flag & FSM_DP_TX_FLAG_SG) && n != (iov_nr - 1))
-				pdrv->mhi.dl_flag_array[j] = MHI_CHAIN;
+				mhi->dl_flag_array[j] = MHI_CHAIN;
 			else
-				pdrv->mhi.dl_flag_array[j] =  MHI_EOT;
-			pdrv->mhi.dl_buf_array[j].len = iov[n].iov_len;
+				mhi->dl_flag_array[j] =  MHI_EOT;
+			mhi->dl_buf_array[j].len = iov[n].iov_len;
 
 			if (flag & FSM_DP_TX_FLAG_SG) {
-				pdrv->mhi.dl_flag_array[j] |= MHI_SG;
-				pdrv->mhi.dl_buf_array[j].buf = iov[0].iov_base;
+				mhi->dl_flag_array[j] |= MHI_SG;
+				mhi->dl_buf_array[j].buf = iov[0].iov_base;
 			} else {
-				pdrv->mhi.dl_buf_array[j].buf = iov[n].iov_base;
+				mhi->dl_buf_array[j].buf = iov[n].iov_base;
 			}
 
 			if (dma_addr_array[n]) {
-				pdrv->mhi.dl_buf_array[j].dma_addr =
+				mhi->dl_buf_array[j].dma_addr =
 					dma_addr_array[n];
-				pdrv->mhi.dl_buf_array[j].streaming_dma = true;
+				mhi->dl_buf_array[j].streaming_dma = true;
 			} else {
-				pdrv->mhi.dl_buf_array[j].dma_addr = 0;
-				pdrv->mhi.dl_buf_array[j].streaming_dma = false;
+				mhi->dl_buf_array[j].dma_addr = 0;
+				mhi->dl_buf_array[j].streaming_dma = false;
 			}
 			n++;
 		}
-		ret = fsm_dp_mhi_n_tx(&pdrv->mhi,
-				    num);
+		ret = fsm_dp_mhi_n_tx(mhi, num);
 		if (ret) {
 			pdrv->stats.tx_err++;
 			break;
@@ -742,7 +773,7 @@ int fsm_dp_tx(
 		pdrv->stats.tx_cnt += (iov_nr - to_send);
 	else if (!to_send)
 		pdrv->stats.tx_cnt++;
-	spin_unlock_bh(&pdrv->mhi.tx_lock);
+	spin_unlock_bh(&mhi->tx_lock);
 	return ret;
 }
 
@@ -778,6 +809,7 @@ static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 	kfree(pdrv);
 }
 
+// napi function to replenish control channel
 static int fsm_dp_poll(struct napi_struct *napi, int budget)
 {
 	int rx_work = 0;
@@ -785,7 +817,7 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 	int ret;
 
 	pdrv = container_of(napi, struct fsm_dp_drv, napi);
-	rx_work = mhi_poll(pdrv->mhi.mhi_dev, budget, DMA_FROM_DEVICE);
+	rx_work = mhi_poll(pdrv->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);
 	if (rx_work < 0) {
 		rx_work = 0;
 		pr_err("Error polling ret:%d\n", rx_work);
@@ -793,7 +825,7 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 		goto exit_poll;
 	}
 
-	ret = fsm_dp_mhi_rx_replenish(pdrv);
+	ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_control_dev);
 	if (ret == -ENOMEM)
 		schedule_work(&pdrv->alloc_work);  /* later */
 	if (rx_work < budget)
@@ -804,6 +836,7 @@ exit_poll:
 	return rx_work;
 }
 
+// worker function to replenish control channel, in case replenish failed in napi function
 static void fsm_dp_alloc_work(struct work_struct *work)
 {
 	struct fsm_dp_drv *pdrv;
@@ -814,7 +847,7 @@ static void fsm_dp_alloc_work(struct work_struct *work)
 	pdrv = container_of(work, struct fsm_dp_drv, alloc_work);
 
 	do {
-		ret = fsm_dp_mhi_rx_replenish(pdrv);
+		ret = fsm_dp_mhi_rx_replenish(&pdrv->mhi_control_dev);
 		/* sleep and try again */
 		if (ret == -ENOMEM) {
 			msleep(sleep_ms);

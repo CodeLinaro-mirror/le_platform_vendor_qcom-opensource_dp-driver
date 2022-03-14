@@ -129,6 +129,20 @@ static inline void __buf_mem_free(struct fsm_dp_mem_loc *loc)
 	}
 }
 
+/*
+ * get the MHI controller dev - needed for dma operations. Control and data
+ * channels refer to same MHI controller dev.
+ */
+struct device *get_mhi_cntrl_dev(struct fsm_dp_drv *pdrv)
+{
+	if (fsm_dp_mhi_is_ready(&pdrv->mhi_control_dev))
+		return pdrv->mhi_control_dev.mhi_dev->mhi_cntrl->cntrl_dev;
+	else if (fsm_dp_mhi_is_ready(&pdrv->mhi_data_dev))
+		return pdrv->mhi_data_dev.mhi_dev->mhi_cntrl->cntrl_dev;
+
+	return NULL;
+}
+
 int fsm_dp_ring_init(
 	struct fsm_dp_ring *ring,
 	unsigned int ringsz,
@@ -427,13 +441,13 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 		for (i = 0; i < mem->loc.num_cluster; i++) {
 			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
-					pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
+					get_mhi_cntrl_dev(pdrv),
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
 			} else {
 				dma_unmap_single(
-					pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
+					get_mhi_cntrl_dev(pdrv),
 					mem->loc.cluster_dma_addr[i],
 					FSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
@@ -479,7 +493,8 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 	case FSM_DP_MEM_TYPE_DL_L1_DATA:
 	case FSM_DP_MEM_TYPE_DL_L1_CTL:
 	case FSM_DP_MEM_TYPE_DL_RF:
-	case FSM_DP_MEM_TYPE_UL:
+	case FSM_DP_MEM_TYPE_UL_CONTROL:
+	case FSM_DP_MEM_TYPE_UL_DATA:
 		for (j = 0; j < mem->loc.num_cluster; j++) {
 			element_data = j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 			cl_start = mem->loc.cluster_kernel_addr[j];
@@ -495,7 +510,7 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 				p->fence = FSM_DP_BUFFER_FENCE_SIG;
 				p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
 				p->buf_index = buf_index;
-				if (mempool->type != FSM_DP_MEM_TYPE_UL)
+				if (!fsm_dp_mem_type_is_ul(mempool->type))
 					p->xmit_status = FSM_DP_XMIT_OK;
 				/* pointing to start of user data */
 				ring->element[buf_index].element_data =
@@ -538,9 +553,9 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 
 	/*
 	 * allocate dummy buffer for out of buffer condition
-	 * if FSM_DP_MEM_TYPE_UL pool
+	 * if FSM_DP_MEM_TYPE_UL_* pool
 	 */
-	if (type == FSM_DP_MEM_TYPE_UL) {
+	if (fsm_dp_mem_type_is_ul(type)) {
 		mempool->dummy_buf = kzalloc(buf_sz, GFP_KERNEL);
 		if (IS_ERR(mempool->dummy_buf)) {
 			mempool->dummy_buf = NULL;
@@ -554,9 +569,12 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 		goto cleanup;
 	}
 
-	if (fsm_dp_mhi_is_ready(&pdrv->mhi) && may_map &&
-			fsm_dp_mempool_dma_map(pdrv, mempool, type))
-		goto cleanup_mem;
+	if (may_map) {
+		struct device *dev = get_mhi_cntrl_dev(pdrv);
+
+		if (dev && fsm_dp_mempool_dma_map(dev, mempool))
+			goto cleanup_mem;
+	}
 	cookie = MMAP_COOKIE(type, FSM_DP_MMAP_TYPE_RING);
 	if (fsm_dp_ring_init(&mempool->ring, ring_sz, cookie)) {
 		FSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
@@ -616,12 +634,10 @@ void fsm_dp_mempool_release_no_delay(struct fsm_dp_mempool *mempool)
 }
 
 int fsm_dp_mempool_dma_map(
-	struct fsm_dp_drv *pdrv,
-	struct fsm_dp_mempool *mpool,
-	enum fsm_dp_mem_type type)
+	struct device *dev,	/* device for iommu ops */
+	struct fsm_dp_mempool *mpool)
 {
 	enum dma_data_direction direction;
-	struct device *dev;	/* device for iommu ops */
 	int i, k;
 	unsigned int size;
 	struct fsm_dp_mem_loc *loc;
@@ -629,8 +645,7 @@ int fsm_dp_mempool_dma_map(
 	loc = &mpool->mem.loc;
 	if (loc->dma_mapped)
 		return 0;
-	dev = pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev;
-	if (type == FSM_DP_MEM_TYPE_UL)
+	if (fsm_dp_mem_type_is_ul(mpool->type))
 		direction = DMA_BIDIRECTIONAL; /* rx, tx for rx loopback */
 	else
 		direction = DMA_TO_DEVICE;
@@ -684,10 +699,7 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 			__func__, buf_sz, FSM_DP_MAX_DL_MSG_LEN);
 		return NULL;
 	}
-	if (pdrv->mhi.mhi_destroyed) {
-		FSM_DP_WARN("%s: mhi device destroyed\n", __func__);
-		return NULL;
-	}
+	/* TODO: return in case of race with mhi_xxx_dev getting destroyed */
 
 	ring_sz = calc_ring_size(buf_cnt);
 	if (unlikely(!ring_sz))
@@ -696,7 +708,7 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	mutex_lock(&pdrv->mempool_lock);
 	mempool = pdrv->mempool[type];
 	if (mempool) {
-		if (type !=  FSM_DP_MEM_TYPE_UL &&
+		if (!fsm_dp_mem_type_is_ul(type) &&
 			(buf_sz > mempool->mem.buf_sz ||
 				buf_cnt > mempool->mem.buf_cnt)) {
 			FSM_DP_ERROR(
@@ -758,13 +770,13 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv)
 			for (i = 0; i < mem->loc.num_cluster; i++) {
 				if (i ==  mem->loc.num_cluster - 1) {
 					dma_unmap_single(
-						pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
+						get_mhi_cntrl_dev(pdrv),
 						mem->loc.cluster_dma_addr[i],
 						size,
 						mem->loc.direction);
 				} else {
 					dma_unmap_single(
-						pdrv->mhi.mhi_dev->mhi_cntrl->cntrl_dev,
+						get_mhi_cntrl_dev(pdrv),
 						mem->loc.cluster_dma_addr[i],
 						FSM_DP_MEMPOOL_CLUSTER_SIZE,
 						mem->loc.direction);
@@ -790,7 +802,7 @@ int fsm_dp_mempool_get_cfg(
 	return 0;
 }
 
-/* For FSM_DP_MEM_TYPE_UL pool only */
+/* For FSM_DP_MEM_TYPE_UL_* pool only */
 int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 {
 	struct fsm_dp_mem *mem;
@@ -847,7 +859,7 @@ int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 	return ret;
 }
 
-/* For FSM_DP_MEM_TYPE_UL pool only */
+/* For FSM_DP_MEM_TYPE_UL_* pool only */
 void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
 				unsigned int *cluster,  unsigned int *c_offset)
 {
@@ -916,9 +928,9 @@ struct fsm_dp_mempool *fsm_dp_find_mempool(
 
 	if (tx) {
 		mem_type = 0;
-		mem_type_last = FSM_DP_MEM_TYPE_UL;
+		mem_type_last = FSM_DP_MEM_TYPE_UL_CONTROL;
 	} else {
-		mem_type = FSM_DP_MEM_TYPE_UL;
+		mem_type = FSM_DP_MEM_TYPE_UL_CONTROL;
 		mem_type_last = FSM_DP_MEM_TYPE_LAST;
 	}
 
@@ -955,9 +967,8 @@ struct fsm_dp_mempool *fsm_dp_find_mempool(
 #define FSM_DP_SYNC_THRESHOLD 4
 bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
 {
-	struct fsm_dp_mempool *mempool = pdrv->mempool[FSM_DP_MEM_TYPE_UL];
+	struct fsm_dp_mempool *mempool = pdrv->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
 	struct fsm_dp_ring *ring = &mempool->ring;
-	struct fsm_dp_mhi *mhi = &pdrv->mhi;
 
 	if (*ring->prod_tail != pdrv->fsm_dp_prev_ul_prod_tail) {
 		pdrv->fsm_dp_outbuf_drop_sync = 0;
@@ -970,7 +981,6 @@ bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
 			pr_warn("%s prod head %d prod tail %d\n", __func__,
 				*ring->prod_head, *ring->prod_tail);
 			*ring->prod_tail = *ring->prod_head;
-			mhi->stats.rx_resync++;
 			wmb();
 			pdrv->fsm_dp_outbuf_drop_sync = 0;
 			return true;

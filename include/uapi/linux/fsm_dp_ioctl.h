@@ -36,10 +36,10 @@
 		_IOWR(FSM_DP_IOCTL_BASE, 3, struct fsm_dp_ioctl_getcfg)
 
 #define FSM_DP_IOCTL_TX			\
-		_IOWR(FSM_DP_IOCTL_BASE, 4, struct iovec)
+		_IOWR(FSM_DP_IOCTL_BASE, 4, struct fsm_dp_ioctl_tx)
 
 #define FSM_DP_IOCTL_SG_TX		\
-		_IOWR(FSM_DP_IOCTL_BASE, 5, struct iovec)
+		_IOWR(FSM_DP_IOCTL_BASE, 5, struct fsm_dp_ioctl_tx)
 
 #define FSM_DP_IOCTL_TX_MODE_CONFIG	\
 		_IOWR(FSM_DP_IOCTL_BASE, 6, unsigned int)
@@ -59,7 +59,8 @@ enum fsm_dp_mem_type {
 	FSM_DP_MEM_TYPE_DL_L1_DATA,
 	FSM_DP_MEM_TYPE_DL_L1_CTL,
 	FSM_DP_MEM_TYPE_DL_RF,
-	FSM_DP_MEM_TYPE_UL,
+	FSM_DP_MEM_TYPE_UL_CONTROL,
+	FSM_DP_MEM_TYPE_UL_DATA,
 	FSM_DP_MEM_TYPE_LAST,
 };
 
@@ -256,6 +257,11 @@ struct fsm_dp_mempool_cfg {
 	struct fsm_dp_ring_cfg ring;
 };
 
+enum fsm_dp_channel {
+	FSM_DP_CH_CONTROL,
+	FSM_DP_CH_DATA,
+};
+
 struct fsm_dp_ioctl_mempool_alloc {
 	__u32 type;		/* type defined in enum fsm_dp_mem_type */
 	__u32 buf_sz;		/* size of buffer */
@@ -266,6 +272,11 @@ struct fsm_dp_ioctl_mempool_alloc {
 struct fsm_dp_ioctl_getcfg {
 	__u32 type;
 	void *cfg;
+};
+
+struct fsm_dp_ioctl_tx {
+	enum fsm_dp_channel ch;
+	struct iovec iov;
 };
 
 static inline int fsm_dp_mem_type_is_valid(enum fsm_dp_mem_type type)
@@ -279,7 +290,8 @@ static inline const char *fsm_dp_mem_type_to_str(enum fsm_dp_mem_type type)
 	case FSM_DP_MEM_TYPE_DL_L1_DATA: return "DL_L1_DATA";
 	case FSM_DP_MEM_TYPE_DL_L1_CTL: return "DL_L1_CTRL";
 	case FSM_DP_MEM_TYPE_DL_RF: return "DL_RF";
-	case FSM_DP_MEM_TYPE_UL: return "UL";
+	case FSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
+	case FSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
 	default: return "unknown";
 	}
 }
@@ -339,6 +351,11 @@ static inline const char *fsm_dp_buf_state_to_str(enum fsm_dp_buf_state state)
 	default:
 		return "unknown";
 	};
+}
+
+static inline bool fsm_dp_mem_type_is_ul(enum fsm_dp_mem_type type)
+{
+	return type == FSM_DP_MEM_TYPE_UL_CONTROL || type == FSM_DP_MEM_TYPE_UL_DATA;
 }
 
 #endif /* __FSM_DP_IOCTL_H__ */
