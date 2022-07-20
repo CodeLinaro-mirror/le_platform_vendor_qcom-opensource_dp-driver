@@ -699,46 +699,6 @@ int fsm_dp_tx(
 		}
 	}
 
-	{
-		struct fsm_dp_msghdr *msghdr = NULL;
-		unsigned int total_len = 0;
-
-		for (n = 0; n < iov_nr; n++) {
-			struct fsm_dp_mempool *mempool;
-			struct fsm_dp_buf_cntrl *buf_cntrl;
-
-			buf_cntrl = iov[n].iov_base - sizeof(struct fsm_dp_buf_cntrl);
-			mempool = fsm_dp_get_mempool(pdev, buf_cntrl, NULL);
-			if (mempool == NULL) {
-				FSM_DP_ERROR("%s: fsm_dp_get_mempool failed addr=0x%p\n",
-					     __func__, iov[n].iov_base);
-				return -EINVAL;
-			}
-
-			if ((flag & FSM_DP_TX_FLAG_SG) && n) {
-				total_len += iov[n].iov_len;
-				continue;
-			}
-
-			/* add fsm_dp_msghdr to each non-SG buffer and to first SG buffer */
-			FSM_DP_ASSERT(iov[n].iov_len + sizeof(*msghdr) > mempool->mem.buf_sz,
-				      "invalid len");
-			memmove(iov[n].iov_base + sizeof(*msghdr), iov[n].iov_base, iov[n].iov_len);
-
-			msghdr = iov[n].iov_base;
-			memset(msghdr, 0, sizeof(*msghdr));
-			msghdr->version = FSM_DP_MSG_HDR_VERSION;
-			msghdr->type = FSM_DP_MSG_TYPE_LPBK_REQ;
-			msghdr->length = iov[n].iov_len;
-			msghdr->sequence = atomic_inc_return(&pdev->tx_seqnum);
-
-			iov[n].iov_len += sizeof(*msghdr);
-		}
-		/* 1st buffer in SG have total length */
-		if (flag & FSM_DP_TX_FLAG_SG)
-			msghdr->length += total_len;
-	}
-
 	spin_lock_bh(&mhi->tx_lock);
 	to_send = 0;
 	for (n = 0, to_send = iov_nr; to_send > 0; ) {

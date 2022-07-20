@@ -323,18 +323,6 @@ static void __mhi_dl_xfer_cb(
 				fsm_dp_mempool_put_buf(mempool, packet_start + 1);
 			return;
 		}
-		{
-			/* remove msghdr from 1st buffer (next buffers don't have msghdr) */
-			void *buf = packet_start + 1;
-
-			FSM_DP_ASSERT(result->bytes_xferd <= sizeof(struct fsm_dp_msghdr),
-				      "invalid bytes_xferd");
-			memmove(buf,
-				buf + sizeof(struct fsm_dp_msghdr),
-				min_t(unsigned int, result->bytes_xferd, mempool->mem.buf_sz)
-					- sizeof(struct fsm_dp_msghdr));
-			packet_start->len -= sizeof(struct fsm_dp_msghdr);
-		}
 
 		mhi->stats.rx_cnt++;
 		fsm_dp_rx(pdev, packet_start, result->bytes_xferd);
