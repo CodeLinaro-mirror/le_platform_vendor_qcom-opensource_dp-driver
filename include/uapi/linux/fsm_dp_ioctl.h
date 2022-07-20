@@ -167,7 +167,6 @@ struct fsm_dp_aggrhdr {
 struct fsm_dp_buf_cntrl {
 	uint32_t signature;
 	uint32_t state;
-	struct timespec ts;
 	int32_t xmit_status;
 	uint16_t mem_type;	/* enum fsm_dp_mem_type */
 	uint32_t buf_index;
@@ -179,7 +178,6 @@ struct fsm_dp_buf_cntrl {
 	unsigned char spare[FSM_DP_L1_CACHE_BYTES
 		- sizeof(uint32_t) /* signature */
 		- sizeof(uint32_t) /* state */
-		- sizeof(struct timespec) /* ts */
 		- sizeof(int32_t) /* xmit_status */
 		- sizeof(uint16_t) /* mem_type */
 		- sizeof(uint32_t) /* buf_index */
