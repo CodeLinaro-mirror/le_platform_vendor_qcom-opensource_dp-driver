@@ -18,11 +18,11 @@
 
 struct fsm_dp_drv;
 
-#define MAX_FSM_DP_MEMPOOL_SIZE (1024 * 1024 * 64)
-#define FSM_DP_MEMPOOL_CLUSTER_SIZE (1024 * 256)
-#define FSM_DP_MEMPOOL_CLUSTER_SHIFT 18
+#define MAX_FSM_DP_MEMPOOL_SIZE ((long)1024 * 1024 * 1024 * 16)
+#define FSM_DP_MEMPOOL_CLUSTER_SIZE (1024 * 1024 * 2)  /* must be > FSM_DP_MAX_DL_MSG_LEN */
+#define FSM_DP_MEMPOOL_CLUSTER_SHIFT 21
 #define FSM_DP_MEMPOOL_CLUSTER_MASK (FSM_DP_MEMPOOL_CLUSTER_SIZE - 1)
-#define MAX_FSM_DP_MEMPOOL_CLUSTER \
+#define MAX_FSM_DP_MEMPOOL_CLUSTERS \
 	(MAX_FSM_DP_MEMPOOL_SIZE / FSM_DP_MEMPOOL_CLUSTER_SIZE)
 
 
@@ -32,13 +32,13 @@ struct fsm_dp_mem_loc {
 				 *  for ring with one cluster only
 				 */
 	unsigned int cookie;	/* mmap cookie */
-	struct page *page[MAX_FSM_DP_MEMPOOL_CLUSTER];
+	struct page *page[MAX_FSM_DP_MEMPOOL_CLUSTERS];
 	unsigned int last_cl_order;
 	unsigned int num_cluster; /* number of cluster, 1 for ring */
-	char *cluster_kernel_addr[MAX_FSM_DP_MEMPOOL_CLUSTER];
+	char *cluster_kernel_addr[MAX_FSM_DP_MEMPOOL_CLUSTERS];
 
 	/* for  FSM_DP_MMAP_TYPE_MEM */
-	dma_addr_t cluster_dma_addr[MAX_FSM_DP_MEMPOOL_CLUSTER];
+	dma_addr_t cluster_dma_addr[MAX_FSM_DP_MEMPOOL_CLUSTERS];
 	enum dma_data_direction direction;
 	bool dma_mapped;
 	unsigned int buf_per_cluster;

@@ -473,8 +473,8 @@ int fsm_dp_rx_init(struct fsm_dp_dev *pdev)
 {
 	unsigned int type;
 	int ret;
-	unsigned int fsm_dp_ul_buf_size = DEFAULT_FSM_MEM_BUF_SIZE;
-	unsigned int fsm_dp_ul_buf_cnt = DEFAULT_FSM_MEM_UL_BUF_CNT;
+	unsigned int fsm_dp_ul_buf_size = FSM_DP_DEFAULT_UL_BUF_SIZE;
+	unsigned int fsm_dp_ul_buf_cnt = FSM_DP_DEFAULT_UL_BUF_CNT;
 
 	// TODO: add module params for ul_buf_size/cnt
 	if (fsm_dp_ul_buf_size > FSM_DP_MAX_UL_MSG_LEN) {

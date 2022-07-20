@@ -159,8 +159,11 @@ struct fsm_dp_aggrhdr {
  * maximum mtu size for FSM DP application, including fsm_dp header
  * Note, need to make sure both sides in sync between NPU, and Q6
  */
-#define FSM_DP_MAX_DL_MSG_LEN   ((16 * 1024) - FSM_DP_L1_CACHE_BYTES)
-#define FSM_DP_MAX_UL_MSG_LEN   ((16 * 1024) - FSM_DP_L1_CACHE_BYTES)
+#define FSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - FSM_DP_L1_CACHE_BYTES)
+#define FSM_DP_MAX_UL_MSG_LEN   FSM_DP_MAX_DL_MSG_LEN
+
+#define FSM_DP_DEFAULT_UL_BUF_SIZE	2048
+#define FSM_DP_DEFAULT_UL_BUF_CNT	4096
 
 #define FSM_DP_INVALID_BUF_INDEX ((uint32_t)-1)
 
@@ -221,7 +224,7 @@ struct fsm_dp_ring_element {
 typedef struct fsm_dp_ring_element fsm_dp_ring_element_t;
 
 struct fsm_dp_mmap_cfg {
-	__u32 length;	/* length parameter for mmap */
+	__u64 length;	/* length parameter for mmap */
 	__u32 cookie;	/* last parameter for mmap */
 };
 

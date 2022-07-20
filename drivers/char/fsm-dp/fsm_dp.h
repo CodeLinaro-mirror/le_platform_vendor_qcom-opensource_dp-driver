@@ -68,8 +68,6 @@ struct vm_area_struct;
 
 #define TX_MODE_LOOPBACK 1
 
-#define DEFAULT_FSM_MEM_BUF_SIZE	2048
-#define DEFAULT_FSM_MEM_UL_BUF_CNT	4096
 #define DEFAULT_RX_QUEUE_SIZE		1024
 
 #define FSM_DP_TX_FLAG_SG	0x01

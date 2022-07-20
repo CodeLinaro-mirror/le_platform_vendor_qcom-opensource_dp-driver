@@ -405,17 +405,27 @@ static int fsm_dp_mem_init(
 	mem->buf_sz = ALIGN(bufsz, cache_line_size());
 	mem->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
 
+	if (fsm_dp_buf_true_size(mem) > FSM_DP_MEMPOOL_CLUSTER_SIZE) {
+		FSM_DP_ERROR("%s: buf_true_size too big %d (CLUSTER_SIZE %d)\n",
+			__func__, fsm_dp_buf_true_size(mem), FSM_DP_MEMPOOL_CLUSTER_SIZE);
+		return -ENOMEM;
+	}
+
 	num_buf_cl = FSM_DP_MEMPOOL_CLUSTER_SIZE / fsm_dp_buf_true_size(mem);
 	num_cl = bufcnt / num_buf_cl;
-	size = num_cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+	size = (long)num_cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	rem_buf = bufcnt % num_buf_cl;
 	if (rem_buf) {
 		num_cl++;
 		rem_size = fsm_dp_buf_true_size(mem) * rem_buf;
 	}
-	if (num_cl > MAX_FSM_DP_MEMPOOL_CLUSTER) {
-		FSM_DP_ERROR("%s: failed to allocate DMA memory. Too Big %d\n",
-				__func__, num_cl);
+	if (num_cl > MAX_FSM_DP_MEMPOOL_CLUSTERS) {
+		FSM_DP_ERROR("%s: mempool size too big. num_cl %d\n", __func__, num_cl);
+		return -ENOMEM;
+	}
+	if (ULONG_MAX / FSM_DP_MEMPOOL_CLUSTER_SIZE < num_cl) {
+		FSM_DP_ERROR("%s: mempool size too big. num_cl %d CLUSTER_SIZE %d\n",
+			__func__, num_cl, FSM_DP_MEMPOOL_CLUSTER_SIZE);
 		return -ENOMEM;
 	}
 	mem->loc.num_cluster = num_cl;
