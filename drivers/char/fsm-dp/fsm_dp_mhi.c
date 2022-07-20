@@ -489,8 +489,8 @@ static void fsm_dp_mhi_remove(struct mhi_device *mhi_dev)
 }
 
 static struct mhi_device_id fsm_dp_mhi_match_table[] = {
-	{ .chan = "IP_HW0", .driver_data = FSM_DP_CH_DATA },
-	{ .chan = "IP_HW1", .driver_data = FSM_DP_CH_CONTROL },
+	{ .chan = "IP_HW0", .driver_data = FSM_DP_CH_CONTROL },
+	{ .chan = "IP_HW1", .driver_data = FSM_DP_CH_DATA },
 	{},
 };
 
