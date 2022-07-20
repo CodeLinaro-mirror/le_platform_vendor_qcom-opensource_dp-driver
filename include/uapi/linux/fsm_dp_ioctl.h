@@ -59,9 +59,8 @@
 #define FSM_DP_MSG_HDR_VERSION		0x1
 
 enum fsm_dp_mem_type {
-	FSM_DP_MEM_TYPE_DL_L1_DATA,
-	FSM_DP_MEM_TYPE_DL_L1_CTL,
-	FSM_DP_MEM_TYPE_DL_RF,
+	FSM_DP_MEM_TYPE_DL_CONTROL,
+	FSM_DP_MEM_TYPE_DL_DATA,
 	FSM_DP_MEM_TYPE_UL_CONTROL,
 	FSM_DP_MEM_TYPE_UL_DATA,
 	FSM_DP_MEM_TYPE_LAST,
@@ -296,9 +295,8 @@ static inline int fsm_dp_mem_type_is_valid(enum fsm_dp_mem_type type)
 static inline const char *fsm_dp_mem_type_to_str(enum fsm_dp_mem_type type)
 {
 	switch (type) {
-	case FSM_DP_MEM_TYPE_DL_L1_DATA: return "DL_L1_DATA";
-	case FSM_DP_MEM_TYPE_DL_L1_CTL: return "DL_L1_CTRL";
-	case FSM_DP_MEM_TYPE_DL_RF: return "DL_RF";
+	case FSM_DP_MEM_TYPE_DL_CONTROL: return "DL_CTRL";
+	case FSM_DP_MEM_TYPE_DL_DATA: return "DL_DATA";
 	case FSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
 	case FSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
 	default: return "unknown";
@@ -365,6 +363,11 @@ static inline const char *fsm_dp_buf_state_to_str(enum fsm_dp_buf_state state)
 static inline bool fsm_dp_mem_type_is_ul(enum fsm_dp_mem_type type)
 {
 	return type == FSM_DP_MEM_TYPE_UL_CONTROL || type == FSM_DP_MEM_TYPE_UL_DATA;
+}
+
+static inline bool fsm_dp_mem_type_is_dl(enum fsm_dp_mem_type type)
+{
+	return type == FSM_DP_MEM_TYPE_DL_CONTROL || type == FSM_DP_MEM_TYPE_DL_DATA;
 }
 
 #endif /* __FSM_DP_IOCTL_H__ */

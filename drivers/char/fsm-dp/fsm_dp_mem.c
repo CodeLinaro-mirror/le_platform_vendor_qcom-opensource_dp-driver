@@ -489,47 +489,40 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 	unsigned int buf_index = 0;
 	char *cl_start;
 
-	switch (mempool->type) {
-	case FSM_DP_MEM_TYPE_DL_L1_DATA:
-	case FSM_DP_MEM_TYPE_DL_L1_CTL:
-	case FSM_DP_MEM_TYPE_DL_RF:
-	case FSM_DP_MEM_TYPE_UL_CONTROL:
-	case FSM_DP_MEM_TYPE_UL_DATA:
-		for (j = 0; j < mem->loc.num_cluster; j++) {
-			element_data = j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
-			cl_start = mem->loc.cluster_kernel_addr[j];
-			if (j == mem->loc.num_cluster - 1)
-				cl_buf_cnt = mem->buf_cnt -
-					(mem->loc.buf_per_cluster * j);
-			else
-				cl_buf_cnt = mem->loc.buf_per_cluster;
-			for (i = 0; i < cl_buf_cnt; i++) {
-				p = (struct fsm_dp_buf_cntrl *) (cl_start +
-					(i * fsm_dp_buf_true_size(mem)));
-				p->signature = FSM_DP_BUFFER_SIG;
-				p->fence = FSM_DP_BUFFER_FENCE_SIG;
-				p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
-				p->mem_type = mempool->type;
-				p->buf_index = buf_index;
-				p->next_packet = NULL;
-				if (!fsm_dp_mem_type_is_ul(mempool->type))
-					p->xmit_status = FSM_DP_XMIT_OK;
-				/* pointing to start of user data */
-				ring->element[buf_index].element_data =
-					element_data + mem->buf_overhead_sz;
-				/* entry valid */
-				ring->element[buf_index].element_ctrl = 0;
-				element_data += fsm_dp_buf_true_size(mem);
-				buf_index++;
-			}
+	if (!fsm_dp_mem_type_is_valid(mempool->type))
+		return;
+
+	for (j = 0; j < mem->loc.num_cluster; j++) {
+		element_data = j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+		cl_start = mem->loc.cluster_kernel_addr[j];
+		if (j == mem->loc.num_cluster - 1)
+			cl_buf_cnt = mem->buf_cnt -
+				(mem->loc.buf_per_cluster * j);
+		else
+			cl_buf_cnt = mem->loc.buf_per_cluster;
+		for (i = 0; i < cl_buf_cnt; i++) {
+			p = (struct fsm_dp_buf_cntrl *) (cl_start +
+				(i * fsm_dp_buf_true_size(mem)));
+			p->signature = FSM_DP_BUFFER_SIG;
+			p->fence = FSM_DP_BUFFER_FENCE_SIG;
+			p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
+			p->mem_type = mempool->type;
+			p->buf_index = buf_index;
+			p->next_packet = NULL;
+			if (!fsm_dp_mem_type_is_ul(mempool->type))
+				p->xmit_status = FSM_DP_XMIT_OK;
+			/* pointing to start of user data */
+			ring->element[buf_index].element_data =
+				element_data + mem->buf_overhead_sz;
+			/* entry valid */
+			ring->element[buf_index].element_ctrl = 0;
+			element_data += fsm_dp_buf_true_size(mem);
+			buf_index++;
 		}
-		*ring->cons_head = *ring->cons_tail = 0;
-		*ring->prod_head = *ring->prod_tail = mem->buf_cnt - 1;
-		wmb();	/* Ensure all the data are written */
-		break;
-	default:
-		break;
 	}
+	*ring->cons_head = *ring->cons_tail = 0;
+	*ring->prod_head = *ring->prod_tail = mem->buf_cnt - 1;
+	wmb();	/* Ensure all the data are written */
 }
 
 static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
