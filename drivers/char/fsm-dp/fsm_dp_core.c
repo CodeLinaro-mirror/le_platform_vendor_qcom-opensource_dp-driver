@@ -14,7 +14,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
-#include <linux/platform_device.h>
 #include <linux/of_device.h>
 #include "fsm_dp.h"
 
@@ -472,27 +471,18 @@ free_rxbuf:
 
 int fsm_dp_rx_init(struct fsm_dp_dev *pdev)
 {
-	struct fsm_dp_drv *pdrv = pdev->pdrv;
-	struct device_node *of_node = pdrv->dev->of_node;
-	const __be32 *of_prop = NULL;
-	const void *prop = NULL;
-	unsigned int len = 0, type;
+	unsigned int type;
 	int ret;
 	unsigned int fsm_dp_ul_buf_size = DEFAULT_FSM_MEM_BUF_SIZE;
 	unsigned int fsm_dp_ul_buf_cnt = DEFAULT_FSM_MEM_UL_BUF_CNT;
 
-	prop = of_get_property(of_node, "qcom,ul-bufs", &len);
-	if (prop && len == (sizeof(unsigned int) * 2)) {
-		of_prop = prop;
-		fsm_dp_ul_buf_size = be32_to_cpu(of_prop[0]);
-		fsm_dp_ul_buf_cnt = be32_to_cpu(of_prop[1]);
-		if (fsm_dp_ul_buf_size > FSM_DP_MAX_UL_MSG_LEN) {
-			FSM_DP_ERROR("%s: UL buffer size %d defined in dts exceeds limit %d\n",
-				__func__,
-				fsm_dp_ul_buf_size,
-				FSM_DP_MAX_UL_MSG_LEN);
-			return -ENOMEM;
-		}
+	// TODO: add module params for ul_buf_size/cnt
+	if (fsm_dp_ul_buf_size > FSM_DP_MAX_UL_MSG_LEN) {
+		FSM_DP_ERROR("%s: UL buffer size %d exceeds limit %d\n",
+			__func__,
+			fsm_dp_ul_buf_size,
+			FSM_DP_MAX_UL_MSG_LEN);
+		return -ENOMEM;
 	}
 
 	pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL] = fsm_dp_mempool_alloc(
@@ -520,14 +510,9 @@ int fsm_dp_rx_init(struct fsm_dp_dev *pdev)
 		return -ENOMEM;
 	}
 
-	of_prop = NULL;
-	prop = of_get_property(of_node, "qcom,rx-queue-size", &len);
-	if (prop && len == (sizeof(unsigned int) * FSM_DP_RX_TYPE_LAST))
-		of_prop = prop;
 	for (type = 0; type < FSM_DP_RX_TYPE_LAST; type++) {
+		// TODO: add module param for rx_queue_size
 		ret = fsm_dp_rxqueue_init(&pdev->rxq[type], type,
-			(of_prop) ?
-			be32_to_cpu(of_prop[type]) :
 			DEFAULT_RX_QUEUE_SIZE);
 		if (ret) {
 			FSM_DP_ERROR("%s: failed to init rxqueue!\n", __func__);
@@ -753,10 +738,7 @@ static void fsm_dp_alloc_work(struct work_struct *work)
 
 static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 {
-	struct device *dev = pdrv->dev;
 	int ret, i;
-
-	of_dma_configure(dev, dev->of_node, true);
 
 	for (i = 0; i < FSM_DP_MAX_NUM_DEVS; i++) {
 		struct fsm_dp_dev *pdev = &pdrv->dp_devs[i];
@@ -782,7 +764,6 @@ static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 
 
 exit:
-	of_node_put(dev->of_node);
 	return ret;
 }
 
@@ -805,7 +786,7 @@ static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 	kfree(pdrv);
 }
 
-static int fsm_dp_probe(struct platform_device *pdev)
+static int fsm_dp_probe(void)
 {
 	struct fsm_dp_drv *pdrv;
 	int ret;
@@ -815,8 +796,6 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);
 	if (IS_ERR(pdrv))
 		return -ENOMEM;
-
-	pdrv->dev = &pdev->dev;
 	fsm_dp_pdrv = pdrv;
 
 	ret = fsm_dp_core_init(pdrv);
@@ -835,8 +814,6 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	if (ret)
 		goto cleanup_debugfs;
 
-	platform_set_drvdata(pdev, pdrv);
-
 	pr_info("FSM-DP: module initialized now\n");
 	return 0;
 
@@ -851,9 +828,9 @@ cleanup:
 	return ret;
 }
 
-static int fsm_dp_remove(struct platform_device *pdev)
+static int fsm_dp_remove(void)
 {
-	struct fsm_dp_drv *pdrv = platform_get_drvdata(pdev);
+	struct fsm_dp_drv *pdrv = fsm_dp_pdrv;
 
 	if (pdrv) {
 		fsm_dp_mhi_cleanup(pdrv);
@@ -866,21 +843,21 @@ static int fsm_dp_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id fsm_dp_of_table[] = {
-	{ .compatible = "qcom,fsm-dp" },
-	{ },
-};
-MODULE_DEVICE_TABLE(of, fsm_dp_of_table);
+static int __init fsm_dp_module_init(void)
+{
+	pr_info("fsm_dp_module_init\n");
 
-static struct platform_driver __fsm_dp_platform_drv = {
-	.probe	= fsm_dp_probe,
-	.remove	= fsm_dp_remove,
-	.driver	= {
-		.name		= KBUILD_MODNAME,
-		.of_match_table	= fsm_dp_of_table,
-	},
-};
+	return fsm_dp_probe();
+}
+module_init(fsm_dp_module_init);
 
-module_platform_driver(__fsm_dp_platform_drv);
+static void __exit fsm_dp_module_exit(void)
+{
+	pr_info("fsm_dp_module_exit\n");
+
+	fsm_dp_remove();
+}
+module_exit(fsm_dp_module_exit);
+
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("FSM DP driver");

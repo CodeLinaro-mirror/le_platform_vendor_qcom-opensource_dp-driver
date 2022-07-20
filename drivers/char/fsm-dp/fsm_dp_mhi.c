@@ -388,7 +388,7 @@ static int fsm_dp_mhi_probe(
 		return -ENODEV;
 
 	pdev = &__pdrv->dp_devs[0];
-	ret = fsm_dp_cdev_add(pdev);
+	ret = fsm_dp_cdev_add(pdev, &mhi_dev->dev);
 	if (ret)
 		return ret;
 

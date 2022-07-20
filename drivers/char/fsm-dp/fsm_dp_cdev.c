@@ -945,7 +945,7 @@ void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv)
 }
 
 // called from MHI probe for each VF
-int fsm_dp_cdev_add(struct fsm_dp_dev *pdev)
+int fsm_dp_cdev_add(struct fsm_dp_dev *pdev, struct device* mhi_dev)
 {
 	struct device *dev;
 	int ret, new_devno;
@@ -968,7 +968,7 @@ int fsm_dp_cdev_add(struct fsm_dp_dev *pdev)
 		goto err;
 	}
 
-	dev = device_create(pdrv->dev_class, pdrv->dev, new_devno, pdrv, FSM_DP_CDEV_NAME "%d",
+	dev = device_create(pdrv->dev_class, mhi_dev, new_devno, pdrv, FSM_DP_CDEV_NAME "%d",
 			    index);
 	if (IS_ERR(dev)) {
 		FSM_DP_ERROR("%s: device_create failed\n", __func__);

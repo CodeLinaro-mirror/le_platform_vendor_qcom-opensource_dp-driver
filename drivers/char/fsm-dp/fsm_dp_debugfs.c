@@ -16,7 +16,6 @@
 #include <linux/debugfs.h>
 #include <linux/atomic.h>
 #include <linux/slab.h>
-#include <linux/platform_device.h>
 
 #define MEM_DUMP_COL_WIDTH 16
 #define MAX_MEM_DUMP_SIZE 256
@@ -685,10 +684,8 @@ DEFINE_DEBUGFS_OPS(debugfs_dev_status, debugfs_dev_status_show, NULL);
 static int debugfs_drv_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
-	struct platform_device *pdev = to_platform_device(drv->dev);
 
 	seq_printf(s, "Driver:         %llx\n", (u64) drv);
-	seq_printf(s, "Name:           %s\n", pdev->name);
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv, debugfs_drv_show, NULL);

@@ -212,7 +212,7 @@ struct fsm_dp_drv {
 
 int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv);
-int fsm_dp_cdev_add(struct fsm_dp_dev *pdev);
+int fsm_dp_cdev_add(struct fsm_dp_dev *pdev, struct device* mhi_dev);
 void fsm_dp_cdev_del(struct fsm_dp_dev *pdev);
 
 int fsm_dp_debugfs_init(struct fsm_dp_drv *pdrv);
