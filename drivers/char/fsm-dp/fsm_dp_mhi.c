@@ -380,6 +380,7 @@ static int fsm_dp_mhi_probe(
 	int ret;
 	struct fsm_dp_mhi *mhi;
 	struct fsm_dp_mempool *mempool;
+	unsigned int vf_num;
 
 	FSM_DP_DEBUG("%s: probing mhi chan %s driver_data %ld\n",
 		     __func__, id->chan, id->driver_data);
@@ -387,10 +388,28 @@ static int fsm_dp_mhi_probe(
 	if (__pdrv == NULL)
 		return -ENODEV;
 
-	pdev = &__pdrv->dp_devs[0];
-	ret = fsm_dp_cdev_add(pdev, &mhi_dev->dev);
-	if (ret)
-		return ret;
+	// TODO: support multiple DU devices (each one could be SR-IOV enabled)
+	vf_num = mhi_get_device_instance_id(mhi_dev->mhi_cntrl);
+	FSM_DP_DEBUG("%s: VF %d\n", __func__, vf_num);
+	if (vf_num < 0) {
+		/* SR-IOV disabled, create single device node */
+		pdev = &__pdrv->dp_devs[0];
+	} else if (vf_num == 0) {
+		/* SR-IOV enabled, PF device: ignore */
+		return 0;
+	} else if (vf_num >= FSM_DP_MAX_NUM_DEVS) {
+		/* invalid id */
+		FSM_DP_ERROR("%s: invalid instance id %d\n", __func__, vf_num);
+		return -EINVAL;
+	} else {
+		/* SR-IOV enabled, VF device. vf_num is 1..4 */
+		pdev = &__pdrv->dp_devs[vf_num];
+	}
+	if (!pdev->cdev_inited) {
+		ret = fsm_dp_cdev_add(pdev, &mhi_dev->dev);
+		if (ret)
+			return ret;
+	}
 
 	switch (id->driver_data) {
 	case FSM_DP_CH_CONTROL:
