@@ -15,7 +15,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/local_mhi.h>
-#include <linux/skbuff.h>
 #include <linux/kthread.h>
 
 #define FSM_DP_MHI_NAME	"fsm-l1rf-mhi"
@@ -62,12 +61,6 @@ int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv);
 
 int fsm_dp_mhi_rx_replenish(struct fsm_dp_mhi *mhi);
-
-static inline int fsm_dp_mhi_skb_ul_xfer(
-	struct fsm_dp_mhi *mhi, struct sk_buff *skb)
-{
-	return 0;
-}
 
 static inline int fsm_dp_mhi_n_tx(struct fsm_dp_mhi *mhi,
 				unsigned int num)

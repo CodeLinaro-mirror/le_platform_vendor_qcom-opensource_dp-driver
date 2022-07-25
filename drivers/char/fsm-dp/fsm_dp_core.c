@@ -16,12 +16,10 @@
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/of_device.h>
-#include <linux/skbuff.h>
 #include "fsm_dp.h"
 
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
 static struct fsm_dp_drv *fsm_dp_pdrv;
-struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[FSM_DP_NUM_MSG_TYPE];
 
 #ifdef CONFIG_FSM_DP_TEST
 
@@ -552,106 +550,6 @@ static void fsm_dp_rx_cleanup(struct fsm_dp_dev *pdev)
 	for (type = 0; type < FSM_DP_RX_TYPE_LAST; type++)
 		fsm_dp_rxqueue_cleanup(&pdev->rxq[type]);
 }
-
-int fsm_dp_rel_rx_buf(
-	void *handle,
-	unsigned char *buf
-)
-{
-	struct fsm_dp_kernel_register_db_entry *preg =
-			(struct fsm_dp_kernel_register_db_entry *) handle;
-	struct fsm_dp_mempool *mempool;
-
-	if (!preg || !preg->pdrv)
-		return -EINVAL;
-	mempool = preg->pdrv->dp_devs[0].mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
-	if (!mempool)
-		return -EINVAL;
-	fsm_dp_mempool_put_buf(mempool, buf);
-	return 0;
-}
-EXPORT_SYMBOL(fsm_dp_rel_rx_buf);
-
-void fsm_dp_deregister_kernel_client(
-	void *handle,
-	enum fsm_dp_msg_type msg_type
-)
-{
-	struct fsm_dp_kernel_register_db_entry *preg =
-			(struct fsm_dp_kernel_register_db_entry *) handle;
-
-	if (!handle)
-		return;
-	if (preg->msg_type != msg_type)
-		return;
-	preg->pdrv = NULL;
-};
-EXPORT_SYMBOL(fsm_dp_deregister_kernel_client);
-
-void *fsm_dp_register_kernel_client(
-	enum fsm_dp_msg_type msg_type,
-	int (*tx_cmplt_cb)(struct sk_buff *skb),
-	int (*rx_cb)(struct page *p, unsigned int page_offset, char *buf,
-				unsigned int length)
-)
-{
-	struct fsm_dp_kernel_register_db_entry *preg;
-
-	if (!fsm_dp_pdrv)
-		return NULL;
-	preg = fsm_dp_find_reg_db_type(msg_type);
-	if (!preg)
-		return NULL;
-	if (preg->pdrv) /* already register ? */
-		return NULL;
-	preg->msg_type = msg_type;
-	preg->pdrv = fsm_dp_pdrv;
-	preg->tx_cmplt_cb = tx_cmplt_cb;
-	preg->rx_cb = rx_cb;
-	return preg;
-}
-EXPORT_SYMBOL(fsm_dp_register_kernel_client);
-
-/*
- * fsm_dp_tx_skb
- *     Tx skb to device. skb its data is pointing to fsm dp packet payload.
- *     This function assumes skb is not nonlinear.
- */
-int fsm_dp_tx_skb(
-	void *handle,
-	struct sk_buff *skb
-)
-{
-	struct fsm_dp_kernel_register_db_entry *preg =
-			(struct fsm_dp_kernel_register_db_entry *) handle;
-	struct fsm_dp_msghdr *msghdr;
-	unsigned int plen;
-	int ret = 0;
-
-	if (!preg || !preg->pdrv || !skb || skb_is_nonlinear(skb))
-		return -EINVAL;
-	if (skb_headroom(skb) < sizeof(*msghdr))
-		return -ENOMEM;
-	plen = skb->len;
-	skb_push(skb, sizeof(*msghdr));
-	msghdr = (struct fsm_dp_msghdr *)skb->data;
-	msghdr->type = preg->msg_type;
-	msghdr->reserved = 0;
-	msghdr->aggr = 0;
-	msghdr->version = FSM_DP_MSG_HDR_VERSION;
-	msghdr->sequence = atomic_inc_return(&preg->pdrv->dp_devs[0].tx_seqnum);
-	msghdr->length = plen;
-
-	spin_lock_bh(&preg->pdrv->dp_devs[0].mhi_control_dev.tx_lock);
-	ret = fsm_dp_mhi_skb_ul_xfer(&preg->pdrv->dp_devs[0].mhi_control_dev, skb);
-	if (ret)
-		preg->pdrv->dp_devs[0].stats.tx_err++;
-	else
-		preg->pdrv->dp_devs[0].stats.tx_cnt++;
-	spin_unlock_bh(&preg->pdrv->dp_devs[0].mhi_control_dev.tx_lock);
-	return ret;
-}
-EXPORT_SYMBOL(fsm_dp_tx_skb);
 
 int fsm_dp_tx(
 	struct fsm_dp_dev *pdev,

@@ -210,14 +210,6 @@ struct fsm_dp_drv {
 	struct fsm_dp_dev dp_devs[FSM_DP_MAX_NUM_DEVS];
 };
 
-struct fsm_dp_kernel_register_db_entry {
-	struct fsm_dp_drv *pdrv;
-	enum fsm_dp_msg_type msg_type;
-	int (*tx_cmplt_cb)(struct sk_buff *skb);
-	int (*rx_cb)(struct page *p, unsigned int page_offset, char *buf,
-			unsigned int length);
-};
-
 int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv);
 int fsm_dp_cdev_add(struct fsm_dp_dev *pdev);
@@ -238,27 +230,6 @@ int fsm_dp_rx_poll(struct fsm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
 void fsm_dp_rx(struct fsm_dp_dev *pdev, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
 void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
-
-static inline struct fsm_dp_kernel_register_db_entry *
-fsm_dp_find_reg_db_type(enum fsm_dp_msg_type msg_type)
-{
-	extern struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[];
-
-	switch (msg_type) {
-	case FSM_DP_MSG_TYPE_L1:
-	case FSM_DP_MSG_TYPE_RF:
-	case FSM_DP_MSG_TYPE_TA:
-	case FSM_DP_MSG_TYPE_ORU:
-		return &fsm_dp_reg_db[msg_type];
-	case FSM_DP_MSG_TYPE_LPBK_REQ:
-		return &fsm_dp_reg_db[FSM_DP_MSG_TYPE_ORU] + 1;
-	case FSM_DP_MSG_TYPE_LPBK_RSP:
-		return &fsm_dp_reg_db[FSM_DP_MSG_TYPE_ORU] + 2;
-	default:
-		break;
-	}
-	return NULL;
-};
 
 void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev);
 

@@ -172,23 +172,6 @@ static int __mhi_rx_replenish(
 	return ret;
 }
 
-/*
-static void __mhi_ul_skb_xfer_cmplt(struct sk_buff *skb)
-{
-	struct fsm_dp_msghdr *msghdr;
-	struct fsm_dp_kernel_register_db_entry *preg;
-
-	msghdr = (struct fsm_dp_msghdr *)skb->data;
-	preg = fsm_dp_find_reg_db_type(msghdr->type);
-	if (!preg || !preg->tx_cmplt_cb) {
-		kfree_skb(skb);
-		return;
-	}
-	skb_pull(skb, sizeof(*msghdr));
-	preg->tx_cmplt_cb(skb);
-}
-*/
-
 static struct fsm_dp_mhi *get_dp_mhi(struct mhi_device *mhi_dev)
 {
 	struct fsm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
