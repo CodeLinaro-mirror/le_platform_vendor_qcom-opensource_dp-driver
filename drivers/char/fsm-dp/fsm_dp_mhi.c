@@ -397,13 +397,13 @@ static int fsm_dp_mhi_probe(
 	} else if (vf_num == 0) {
 		/* SR-IOV enabled, PF device: ignore */
 		return 0;
-	} else if (vf_num >= FSM_DP_MAX_NUM_DEVS) {
+	} else if (vf_num > FSM_DP_MAX_NUM_DEVS) {
 		/* invalid id */
 		FSM_DP_ERROR("%s: invalid instance id %d\n", __func__, vf_num);
 		return -EINVAL;
 	} else {
 		/* SR-IOV enabled, VF device. vf_num is 1..4 */
-		pdev = &__pdrv->dp_devs[vf_num];
+		pdev = &__pdrv->dp_devs[vf_num - 1];
 	}
 	if (!pdev->cdev_inited) {
 		ret = fsm_dp_cdev_add(pdev, &mhi_dev->dev);
