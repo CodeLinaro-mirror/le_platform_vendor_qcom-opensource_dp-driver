@@ -280,6 +280,11 @@ static void __mhi_dl_xfer_cb(
 	}
 	pdev->fsm_dp_outbuf_drop_sync = 0;
 
+	if (result->transaction_status == -EOVERFLOW) {
+		FSM_DP_DEBUG("%s: overflow event ignored\n", __func__);
+		return;
+	}
+
 	packet_start = mhi->rx_head_buf_cntrl;
 	packet_end = result->buf_addr - sizeof(struct fsm_dp_buf_cntrl);
 	for (; mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl;
@@ -289,7 +294,7 @@ static void __mhi_dl_xfer_cb(
 			prev_buf_cntrl->next_buf_index = mhi->rx_head_buf_cntrl->buf_index;
 		prev_buf_cntrl = mhi->rx_head_buf_cntrl;
 		if (mhi->rx_head_buf_cntrl != packet_end) {
-			mhi->rx_head_buf_cntrl->len = mempool->mem.buf_sz;
+			mhi->rx_head_buf_cntrl->len = 0;	/* 0 indicates this is part of SG */
 			continue;
 		}
 
@@ -298,7 +303,7 @@ static void __mhi_dl_xfer_cb(
 		packet_start->buf_count = buf_count;
 		packet_end->next = NULL;
 		packet_end->next_buf_index = FSM_DP_INVALID_BUF_INDEX;
-		packet_end->len = (result->bytes_xferd % mempool->mem.buf_sz);
+		packet_end->len = result->bytes_xferd;
 
 		if (result->transaction_status == -ENOTCONN) {
 			mhi->stats.rx_err++;
