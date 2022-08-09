@@ -9,19 +9,19 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef __FSM_DP_MHI_H__
-#define __FSM_DP_MHI_H__
+#ifndef __CSM_DP_MHI_H__
+#define __CSM_DP_MHI_H__
 
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/local_mhi.h>
 #include <linux/kthread.h>
 
-#define FSM_DP_MHI_NAME	"fsm-l1rf-mhi"
+#define CSM_DP_MHI_NAME	"csm-l1rf-mhi"
 
-struct fsm_dp_drv;
+struct csm_dp_drv;
 
-struct fsm_dp_mhi_stats {
+struct csm_dp_mhi_stats {
 	unsigned long tx_cnt;
 	unsigned long tx_acked;
 	unsigned long tx_err;
@@ -36,9 +36,9 @@ struct fsm_dp_mhi_stats {
 };
 
 /* represents MHI channel pair - Tx and Rx */
-struct fsm_dp_mhi {
+struct csm_dp_mhi {
 	struct mhi_device *mhi_dev;
-	struct fsm_dp_mhi_stats stats;
+	struct csm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	spinlock_t tx_lock;
 	struct completion poll_comp;
@@ -49,20 +49,20 @@ struct fsm_dp_mhi {
 	 * the following are for needed storage
 	 * for mhi_queue_n_transfer.
 	 */
-	enum mhi_flags ul_flag_array[FSM_DP_MAX_IOV_SIZE];
-	enum mhi_flags dl_flag_array[FSM_DP_MAX_IOV_SIZE];
-	struct mhi_buf dl_buf_array[FSM_DP_MAX_IOV_SIZE];
-	struct mhi_buf ul_buf_array[FSM_DP_MAX_IOV_SIZE];
+	enum mhi_flags ul_flag_array[CSM_DP_MAX_IOV_SIZE];
+	enum mhi_flags dl_flag_array[CSM_DP_MAX_IOV_SIZE];
+	struct mhi_buf dl_buf_array[CSM_DP_MAX_IOV_SIZE];
+	struct mhi_buf ul_buf_array[CSM_DP_MAX_IOV_SIZE];
 
-	struct fsm_dp_buf_cntrl *rx_head_buf_cntrl, *rx_tail_buf_cntrl;
+	struct csm_dp_buf_cntrl *rx_head_buf_cntrl, *rx_tail_buf_cntrl;
 };
 
-int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv);
-void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv);
+int csm_dp_mhi_init(struct csm_dp_drv *pdrv);
+void csm_dp_mhi_cleanup(struct csm_dp_drv *pdrv);
 
-int fsm_dp_mhi_rx_replenish(struct fsm_dp_mhi *mhi);
+int csm_dp_mhi_rx_replenish(struct csm_dp_mhi *mhi);
 
-static inline int fsm_dp_mhi_n_tx(struct fsm_dp_mhi *mhi,
+static inline int csm_dp_mhi_n_tx(struct csm_dp_mhi *mhi,
 				unsigned int num)
 {
 	int ret;
@@ -81,9 +81,9 @@ static inline int fsm_dp_mhi_n_tx(struct fsm_dp_mhi *mhi,
 	return ret;
 }
 
-static inline bool fsm_dp_mhi_is_ready(struct fsm_dp_mhi *mhi)
+static inline bool csm_dp_mhi_is_ready(struct csm_dp_mhi *mhi)
 {
 	return ((mhi->mhi_dev) ? true : false);
 }
 
-#endif /* __FSM_DP_MHI_H__ */
+#endif /* __CSM_DP_MHI_H__ */

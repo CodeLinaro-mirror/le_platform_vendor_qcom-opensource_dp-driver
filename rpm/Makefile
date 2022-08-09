@@ -1,4 +1,4 @@
-obj-m += dp-driver/drivers/char/fsm-dp/
+obj-m += dp-driver/drivers/char/csm-dp/
 
 KVER=$(shell uname -r)
 

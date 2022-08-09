@@ -9,8 +9,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef __FSM_DP__
-#define __FSM_DP__
+#ifndef __CSM_DP__
+#define __CSM_DP__
 
 #ifndef __KERNEL__
 #define __KERNEL__
@@ -31,15 +31,15 @@
 #include "csm_dp_mhi.h"
 #include "csm_dp_mem.h"
 
-#define FSM_DP_MODULE_NAME		"fsm-dp"
-#define FSM_DP_DEV_CLASS_NAME	FSM_DP_MODULE_NAME
-#define FSM_DP_CDEV_NAME	FSM_DP_MODULE_NAME
-#define FSM_DP_NAPI_WEIGHT 64
+#define CSM_DP_MODULE_NAME		"csm-dp"
+#define CSM_DP_DEV_CLASS_NAME	CSM_DP_MODULE_NAME
+#define CSM_DP_CDEV_NAME	CSM_DP_MODULE_NAME
+#define CSM_DP_NAPI_WEIGHT 64
 
-#define FSM_DP_DEBUG	pr_debug
-#define FSM_DP_INFO	pr_info
-#define FSM_DP_ERROR	pr_err
-#define FSM_DP_WARN	pr_warn
+#define CSM_DP_DEBUG	pr_debug
+#define CSM_DP_INFO	pr_info
+#define CSM_DP_ERROR	pr_err
+#define CSM_DP_WARN	pr_warn
 
 struct vm_area_struct;
 
@@ -59,10 +59,10 @@ struct vm_area_struct;
 	(((cookie) >> MMAP_TYPE_SHIFT) & MMAP_TYPE_MASK)
 
 #define MMAP_RX_COOKIE(type) \
-	MMAP_COOKIE((type)+FSM_DP_MEM_TYPE_LAST, FSM_DP_MMAP_TYPE_RING)
+	MMAP_COOKIE((type)+CSM_DP_MEM_TYPE_LAST, CSM_DP_MMAP_TYPE_RING)
 
 #define MMAP_RX_COOKIE_TO_TYPE(cookie) \
-	(MMAP_COOKIE_TO_MEM_TYPE(cookie) - FSM_DP_MEM_TYPE_LAST)
+	(MMAP_COOKIE_TO_MEM_TYPE(cookie) - CSM_DP_MEM_TYPE_LAST)
 
 #define TEST_RING_MMAP_COOKIE	0x80000000
 
@@ -70,16 +70,16 @@ struct vm_area_struct;
 
 #define DEFAULT_RX_QUEUE_SIZE		1024
 
-#define FSM_DP_TX_FLAG_SG	0x01
-#define FSM_DP_TX_FLAG_LOOPBACK	0x02
-#define FSM_DP_TX_FLAG_MIRROR	0x04
+#define CSM_DP_TX_FLAG_SG	0x01
+#define CSM_DP_TX_FLAG_LOOPBACK	0x02
+#define CSM_DP_TX_FLAG_MIRROR	0x04
 
-#define FSM_DP_ASSERT(cond, msg) do { \
+#define CSM_DP_ASSERT(cond, msg) do { \
 	if (cond) \
 		panic(msg); \
 } while (0)
 
-#define FSM_DP_MAX_NUM_DEVS 4
+#define CSM_DP_MAX_NUM_DEVS 4
 
 /*
  * vma mapping for mempool which includes
@@ -87,47 +87,47 @@ struct vm_area_struct;
  * - ring buffer shared between kernel and user space
  *   for buffer management
  */
-struct fsm_dp_mempool_vma {
-	struct fsm_dp_mempool **pp_mempool;
-	struct vm_area_struct *vma[FSM_DP_MMAP_TYPE_LAST];	/* mmap vma */
-	atomic_t refcnt[FSM_DP_MMAP_TYPE_LAST];
+struct csm_dp_mempool_vma {
+	struct csm_dp_mempool **pp_mempool;
+	struct vm_area_struct *vma[CSM_DP_MMAP_TYPE_LAST];	/* mmap vma */
+	atomic_t refcnt[CSM_DP_MMAP_TYPE_LAST];
 	bool usr_alloc;	/* allocated by user using ioctl */
 };
 
 /* vma mapping for receive queue */
-struct fsm_dp_rxqueue_vma {
-	enum fsm_dp_rx_type type;
+struct csm_dp_rxqueue_vma {
+	enum csm_dp_rx_type type;
 	struct vm_area_struct *vma;
 	atomic_t refcnt;
 };
 
 /* RX queue using ring buffer */
-struct fsm_dp_rxqueue {
-	enum fsm_dp_rx_type type;
-	struct fsm_dp_ring ring;
+struct csm_dp_rxqueue {
+	enum csm_dp_rx_type type;
+	struct csm_dp_ring ring;
 	wait_queue_head_t wq;
 	atomic_t refcnt;
 	bool inited;
 };
 
-/* fsm_dp_cdev tx_mode field bitmap */
+/* csm_dp_cdev tx_mode field bitmap */
 #define TX_MODE_LOOPBACK 1
 
 /* Per-process character device structure */
-struct fsm_dp_cdev {
+struct csm_dp_cdev {
 	struct list_head list;
-	struct fsm_dp_dev *pdev;
+	struct csm_dp_dev *pdev;
 	pid_t pid;
 
 	/* vma mapping for memory pool */
-	struct fsm_dp_mempool_vma mempool_vma[FSM_DP_MEM_TYPE_LAST];
+	struct csm_dp_mempool_vma mempool_vma[CSM_DP_MEM_TYPE_LAST];
 
 	/* vma mapping for receiving queue */
-	struct fsm_dp_rxqueue_vma rxqueue_vma[FSM_DP_RX_TYPE_LAST];
+	struct csm_dp_rxqueue_vma rxqueue_vma[CSM_DP_RX_TYPE_LAST];
 	unsigned int tx_mode;
 };
 
-struct fsm_dp_loopback_stats {
+struct csm_dp_loopback_stats {
 	unsigned long tx_cnt;
 	unsigned long tx_enque;
 	unsigned long tx_drop;
@@ -140,7 +140,7 @@ struct fsm_dp_loopback_stats {
 	unsigned long sched;
 };
 
-struct fsm_dp_loopback_job {
+struct csm_dp_loopback_job {
 	struct list_head list;
 	void *data;
 	unsigned int length;
@@ -148,7 +148,7 @@ struct fsm_dp_loopback_job {
 	bool rx_loopback;
 };
 
-struct fsm_dp_loopback_task {
+struct csm_dp_loopback_task {
 	struct list_head free_q;
 	struct list_head job_q;
 	spinlock_t lock;
@@ -156,15 +156,15 @@ struct fsm_dp_loopback_task {
 	struct workqueue_struct *workq;
 	void *alloc_ptr;
 	bool inited;
-	struct fsm_dp_loopback_stats stats;
+	struct csm_dp_loopback_stats stats;
 };
 
-struct fsm_dp_test_ring {
-	struct fsm_dp_ring ring;
+struct csm_dp_test_ring {
+	struct csm_dp_ring ring;
 	bool enable;
 };
 
-struct fsm_dp_core_stats {
+struct csm_dp_core_stats {
 	unsigned long tx_cnt;
 	unsigned long tx_err;
 
@@ -175,10 +175,10 @@ struct fsm_dp_core_stats {
 	unsigned long rx_budget_overflow;
 };
 
-struct fsm_dp_dev {
-	struct fsm_dp_drv *pdrv;		/* parent */
-	struct fsm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
-	struct fsm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
+struct csm_dp_dev {
+	struct csm_dp_drv *pdrv;		/* parent */
+	struct csm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
+	struct csm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
 	bool cdev_inited;
 	struct cdev cdev;
 	struct net_device dummy_dev;
@@ -187,49 +187,49 @@ struct fsm_dp_dev {
 	struct list_head cdev_head;
 	struct mutex mempool_lock;
 	atomic_t tx_seqnum;
-	struct fsm_dp_mempool *mempool[FSM_DP_MEM_TYPE_LAST];
-	struct fsm_dp_rxqueue rxq[FSM_DP_RX_TYPE_LAST];
-	struct fsm_dp_loopback_task loopback;
-	struct fsm_dp_core_stats stats;
+	struct csm_dp_mempool *mempool[CSM_DP_MEM_TYPE_LAST];
+	struct csm_dp_rxqueue rxq[CSM_DP_RX_TYPE_LAST];
+	struct csm_dp_loopback_task loopback;
+	struct csm_dp_core_stats stats;
 	struct work_struct alloc_work;
-	unsigned int fsm_dp_outbuf_drop_sync;
-	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
+	unsigned int csm_dp_outbuf_drop_sync;
+	csm_dp_ring_index_t csm_dp_prev_ul_prod_tail;
 
-	struct fsm_dp_buf_cntrl	*pending_packets;
+	struct csm_dp_buf_cntrl	*pending_packets;
 
-#ifdef CONFIG_FSM_DP_TEST
-	struct fsm_dp_test_ring test_ring;
+#ifdef CONFIG_CSM_DP_TEST
+	struct csm_dp_test_ring test_ring;
 #endif
 };
 
-struct fsm_dp_drv {
+struct csm_dp_drv {
 	struct device *dev;
 	struct class *dev_class;
 	dev_t devno;
-	struct fsm_dp_dev dp_devs[FSM_DP_MAX_NUM_DEVS];
+	struct csm_dp_dev dp_devs[CSM_DP_MAX_NUM_DEVS];
 };
 
-int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv);
-void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv);
-int fsm_dp_cdev_add(struct fsm_dp_dev *pdev, struct device* mhi_dev);
-void fsm_dp_cdev_del(struct fsm_dp_dev *pdev);
+int csm_dp_cdev_init(struct csm_dp_drv *pdrv);
+void csm_dp_cdev_cleanup(struct csm_dp_drv *pdrv);
+int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev);
+void csm_dp_cdev_del(struct csm_dp_dev *pdev);
 
-int fsm_dp_debugfs_init(struct fsm_dp_drv *pdrv);
-void fsm_dp_debugfs_cleanup(struct fsm_dp_drv *pdrv);
+int csm_dp_debugfs_init(struct csm_dp_drv *pdrv);
+void csm_dp_debugfs_cleanup(struct csm_dp_drv *pdrv);
 
 
-int fsm_dp_tx(
-	struct fsm_dp_dev *pdev,
-	enum fsm_dp_channel ch,
+int csm_dp_tx(
+	struct csm_dp_dev *pdev,
+	enum csm_dp_channel ch,
 	struct iovec *iov,
 	unsigned int iov_nr,
 	unsigned int flag,
 	dma_addr_t dma_addr[]);
-int fsm_dp_rx_poll(struct fsm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
-void fsm_dp_rx(struct fsm_dp_dev *pdev, struct fsm_dp_buf_cntrl *buf_cntrl, unsigned int length);
+int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
+void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
-void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
+void csm_dp_hex_dump(unsigned char *buf, unsigned int len);
 
-void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev);
+void csm_dp_mempool_dev_destroy(struct csm_dp_dev *pdev);
 
-#endif /* __FSM_DP__ */
+#endif /* __CSM_DP__ */

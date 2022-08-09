@@ -9,8 +9,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef __FSM_DP_IOCTL_H__
-#define __FSM_DP_IOCTL_H__
+#ifndef __CSM_DP_IOCTL_H__
+#define __CSM_DP_IOCTL_H__
 
 #include <linux/types.h>
 #ifdef __KERNEL__
@@ -19,111 +19,111 @@
 #include <sys/uio.h>
 #endif
 
-#define FSM_DP_MAX_IOV_SIZE	64
-#define FSM_DP_MAX_SG_IOV_SIZE	8
+#define CSM_DP_MAX_IOV_SIZE	64
+#define CSM_DP_MAX_SG_IOV_SIZE	8
 
 
 
-#define FSM_DP_IOCTL_BASE			'f'
+#define CSM_DP_IOCTL_BASE			'f'
 
-#define FSM_DP_IOCTL_MEMPOOL_ALLOC	\
-		_IOWR(FSM_DP_IOCTL_BASE, 1, struct fsm_dp_ioctl_mempool_alloc)
+#define CSM_DP_IOCTL_MEMPOOL_ALLOC	\
+		_IOWR(CSM_DP_IOCTL_BASE, 1, struct csm_dp_ioctl_mempool_alloc)
 
-#define FSM_DP_IOCTL_MEMPOOL_GET_CONFIG	\
-		_IOWR(FSM_DP_IOCTL_BASE, 2, struct fsm_dp_ioctl_getcfg)
+#define CSM_DP_IOCTL_MEMPOOL_GET_CONFIG	\
+		_IOWR(CSM_DP_IOCTL_BASE, 2, struct csm_dp_ioctl_getcfg)
 
-#define FSM_DP_IOCTL_RX_GET_CONFIG	\
-		_IOWR(FSM_DP_IOCTL_BASE, 3, struct fsm_dp_ioctl_getcfg)
+#define CSM_DP_IOCTL_RX_GET_CONFIG	\
+		_IOWR(CSM_DP_IOCTL_BASE, 3, struct csm_dp_ioctl_getcfg)
 
-#define FSM_DP_IOCTL_TX			\
-		_IOWR(FSM_DP_IOCTL_BASE, 4, struct fsm_dp_ioctl_tx)
+#define CSM_DP_IOCTL_TX			\
+		_IOWR(CSM_DP_IOCTL_BASE, 4, struct csm_dp_ioctl_tx)
 
-#define FSM_DP_IOCTL_SG_TX		\
-		_IOWR(FSM_DP_IOCTL_BASE, 5, struct fsm_dp_ioctl_tx)
+#define CSM_DP_IOCTL_SG_TX		\
+		_IOWR(CSM_DP_IOCTL_BASE, 5, struct csm_dp_ioctl_tx)
 
-#define FSM_DP_IOCTL_TX_MODE_CONFIG	\
-		_IOWR(FSM_DP_IOCTL_BASE, 6, unsigned int)
+#define CSM_DP_IOCTL_TX_MODE_CONFIG	\
+		_IOWR(CSM_DP_IOCTL_BASE, 6, unsigned int)
 
-#define FSM_DP_IOCTL_RX_POLL	\
-		_IOWR(FSM_DP_IOCTL_BASE, 7, struct iovec)
+#define CSM_DP_IOCTL_RX_POLL	\
+		_IOWR(CSM_DP_IOCTL_BASE, 7, struct iovec)
 
 /* ioctl command for testing */
-#define FSM_DP_IOCTL_TEST_RING_WRITE	_IO(FSM_DP_IOCTL_BASE, 0x11)
-#define FSM_DP_IOCTL_TEST_RING_GET_CONFIG	\
-		_IOWR(FSM_DP_IOCTL_BASE, 0x12, struct fsm_dp_ioctl_getcfg)
+#define CSM_DP_IOCTL_TEST_RING_WRITE	_IO(CSM_DP_IOCTL_BASE, 0x11)
+#define CSM_DP_IOCTL_TEST_RING_GET_CONFIG	\
+		_IOWR(CSM_DP_IOCTL_BASE, 0x12, struct csm_dp_ioctl_getcfg)
 
 /* special value to write for testing */
 #define TEST_RING_WRITE_MAGIC_VALUE	0xFFFFFFFE
 
 /* message header version */
-#define FSM_DP_MSG_HDR_VERSION		0x1
+#define CSM_DP_MSG_HDR_VERSION		0x1
 
-#define FSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
+#define CSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
 
-enum fsm_dp_mem_type {
-	FSM_DP_MEM_TYPE_DL_CONTROL,
-	FSM_DP_MEM_TYPE_DL_DATA,
-	FSM_DP_MEM_TYPE_UL_CONTROL,
-	FSM_DP_MEM_TYPE_UL_DATA,
-	FSM_DP_MEM_TYPE_LAST,
+enum csm_dp_mem_type {
+	CSM_DP_MEM_TYPE_DL_CONTROL,
+	CSM_DP_MEM_TYPE_DL_DATA,
+	CSM_DP_MEM_TYPE_UL_CONTROL,
+	CSM_DP_MEM_TYPE_UL_DATA,
+	CSM_DP_MEM_TYPE_LAST,
 };
 
-enum fsm_dp_mmap_type {
-	FSM_DP_MMAP_TYPE_MEM,
-	FSM_DP_MMAP_TYPE_RING,
-	FSM_DP_MMAP_TYPE_LAST,
+enum csm_dp_mmap_type {
+	CSM_DP_MMAP_TYPE_MEM,
+	CSM_DP_MMAP_TYPE_RING,
+	CSM_DP_MMAP_TYPE_LAST,
 };
 
-enum fsm_dp_rx_type {
-	FSM_DP_RX_TYPE_L1,
-	FSM_DP_RX_TYPE_RF,
-	FSM_DP_RX_TYPE_TA,
-	FSM_DP_RX_TYPE_LPBK,
-	FSM_DP_RX_TYPE_ORU,
-	FSM_DP_RX_TYPE_LAST,
+enum csm_dp_rx_type {
+	CSM_DP_RX_TYPE_L1,
+	CSM_DP_RX_TYPE_RF,
+	CSM_DP_RX_TYPE_TA,
+	CSM_DP_RX_TYPE_LPBK,
+	CSM_DP_RX_TYPE_ORU,
+	CSM_DP_RX_TYPE_LAST,
 };
 
-enum fsm_dp_msg_type {
-	FSM_DP_MSG_TYPE_L1		= 0,
-	FSM_DP_MSG_TYPE_RF		= 1,
-	FSM_DP_MSG_TYPE_TA		= 2,
-	FSM_DP_MSG_TYPE_ORU		= 3,
-	FSM_DP_MSG_TYPE_LPBK_REQ	= 0xFE,
-	FSM_DP_MSG_TYPE_LPBK_RSP	= 0xFF,
+enum csm_dp_msg_type {
+	CSM_DP_MSG_TYPE_L1		= 0,
+	CSM_DP_MSG_TYPE_RF		= 1,
+	CSM_DP_MSG_TYPE_TA		= 2,
+	CSM_DP_MSG_TYPE_ORU		= 3,
+	CSM_DP_MSG_TYPE_LPBK_REQ	= 0xFE,
+	CSM_DP_MSG_TYPE_LPBK_RSP	= 0xFF,
 };
 
 /* Note! when we add a new message type, change this macro */
-#define FSM_DP_NUM_MSG_TYPE (FSM_DP_MSG_TYPE_ORU + 3)
+#define CSM_DP_NUM_MSG_TYPE (CSM_DP_MSG_TYPE_ORU + 3)
 
 
-struct fsm_dp_msghdr {
+struct csm_dp_msghdr {
 	uint32_t version : 8;
 	uint32_t type : 8;
 	uint32_t reserved : 15;
-	uint32_t aggr: 1 ; /* if set, fsm_dp_aggrhdr follows */
+	uint32_t aggr: 1 ; /* if set, csm_dp_aggrhdr follows */
 	uint32_t length : 16;
 	uint32_t sequence : 16;
 } __attribute__((packed));
 
 
-#define FSM_DP_BUFFER_FENCE_SIG 0xDEADFACE
-#define FSM_DP_BUFFER_SIG       0xDAC0FFEE
-#define FSM_DP_BUFFER_FENCING   1
+#define CSM_DP_BUFFER_FENCE_SIG 0xDEADFACE
+#define CSM_DP_BUFFER_SIG       0xDAC0FFEE
+#define CSM_DP_BUFFER_FENCING   1
 
 /*
  * The corresponding aggr msg is starting at offset from aggr header of
  * size bytes.
  */
-struct fsm_dp_aggriob {
+struct csm_dp_aggriob {
 	uint16_t offset;
 	uint16_t size;
 };
 
-/* fsm_dp_aggrhdr */
-struct fsm_dp_aggrhdr {
+/* csm_dp_aggrhdr */
+struct csm_dp_aggrhdr {
 	uint32_t reserved : 24;
-	uint32_t n_iobs: 8; /* number of fsm_dp_aggriov */
-	struct fsm_dp_aggriob iob[0]; /* nIovs fsm_dp_aggriov follows */
+	uint32_t n_iobs: 8; /* number of csm_dp_aggriov */
+	struct csm_dp_aggriob iob[0]; /* nIovs csm_dp_aggriov follows */
 } __attribute__((packed));
 
 /*
@@ -131,20 +131,20 @@ struct fsm_dp_aggrhdr {
  * L1_CACHE_BYTES (64 bytes for arm64).
  * It is placed at the beginging
  * of a buffer.
- * fsm_dp_buf_cntrl is placed at the
+ * csm_dp_buf_cntrl is placed at the
  * control area. The last
  * 4 bytes of the area is a fence defined as
- * FSM_DP_BUFFER_FENCE_SIG
- * The size of fsm_dp_buf_cntrl
+ * CSM_DP_BUFFER_FENCE_SIG
+ * The size of csm_dp_buf_cntrl
  * should be less  L1_CACHE_BYTES.
  * User data is placed after the
  * control area of L1_CACHE_BYTES size.
- * User data starts with fsm_dp_msghdr
+ * User data starts with csm_dp_msghdr
  */
-#define FSM_DP_L1_CACHE_BYTES 64  /*
-				   * FSM_DP_L1_CACHE_BYTES is the same as
+#define CSM_DP_L1_CACHE_BYTES 64  /*
+				   * CSM_DP_L1_CACHE_BYTES is the same as
 				   * L1_CACHE_BYTES.
-				   * fsm_dp_ioctl.h is included in
+				   * csm_dp_ioctl.h is included in
 				   * the applications,
 				   * The symbol L1_CACHE_BYTES is defined in the
 				   * kernel, not be used here. Therefore,
@@ -154,84 +154,84 @@ struct fsm_dp_aggrhdr {
  * xmit_status definition
  * If xmit errors, defined as -(error code)
  */
-#define FSM_DP_XMIT_IN_PROGRESS (1)
-#define FSM_DP_XMIT_OK		0
+#define CSM_DP_XMIT_IN_PROGRESS (1)
+#define CSM_DP_XMIT_OK		0
 
 /*
- * maximum mtu size for FSM DP application, including fsm_dp header
+ * maximum mtu size for CSM DP application, including csm_dp header
  * Note, need to make sure both sides in sync between NPU, and Q6
  */
-#define FSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - FSM_DP_L1_CACHE_BYTES)
-#define FSM_DP_MAX_UL_MSG_LEN   FSM_DP_MAX_DL_MSG_LEN
+#define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
+#define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
 
-#define FSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
-#define FSM_DP_DEFAULT_UL_BUF_CNT	4096
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
+#define CSM_DP_DEFAULT_UL_BUF_CNT	4096
 
-#define FSM_DP_INVALID_BUF_INDEX ((uint32_t)-1)
+#define CSM_DP_INVALID_BUF_INDEX ((uint32_t)-1)
 
-struct fsm_dp_buf_cntrl {
+struct csm_dp_buf_cntrl {
 	uint32_t signature;
 	uint32_t state;
 	int32_t xmit_status;
-	uint16_t mem_type;	/* enum fsm_dp_mem_type */
+	uint16_t mem_type;	/* enum csm_dp_mem_type */
 	uint32_t buf_index;
-	struct fsm_dp_buf_cntrl *next;	/* used by kernel only */
+	struct csm_dp_buf_cntrl *next;	/* used by kernel only */
 	uint32_t next_buf_index;	/* used in Rx, kernel writes, user reads */
 	uint32_t len;			/* used in Rx, kernel writes, user reads */
-	struct fsm_dp_buf_cntrl *next_packet;	/* used in Rx only */
+	struct csm_dp_buf_cntrl *next_packet;	/* used in Rx only */
 	uint16_t buf_count;	/* used in Rx only */
-	unsigned char spare[FSM_DP_L1_CACHE_BYTES
+	unsigned char spare[CSM_DP_L1_CACHE_BYTES
 		- sizeof(uint32_t) /* signature */
 		- sizeof(uint32_t) /* state */
 		- sizeof(int32_t) /* xmit_status */
 		- sizeof(uint16_t) /* mem_type */
 		- sizeof(uint32_t) /* buf_index */
-		- sizeof(struct fsm_dp_buf_cntrl *) /* next */
+		- sizeof(struct csm_dp_buf_cntrl *) /* next */
 		- sizeof(uint32_t) /* next_buf_index */
 		- sizeof(uint32_t) /* len */
-		- sizeof(struct fsm_dp_buf_cntrl *) /* next_packet */
+		- sizeof(struct csm_dp_buf_cntrl *) /* next_packet */
 		- sizeof(uint16_t) /* buf_count */
 		- sizeof(uint32_t)];/* fence */
 	uint32_t fence; /* must be last */
 } __attribute__((packed));
 
-enum fsm_dp_buf_state {
-	FSM_DP_BUF_STATE_KERNEL_FREE,
-	FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA,
-	FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP,
-	FSM_DP_BUF_STATE_KERNEL_XMIT_DMA,
-	FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP,
-	FSM_DP_BUF_STATE_USER_FREE,
-	FSM_DP_BUF_STATE_USER_ALLOC,
-	FSM_DP_BUF_STATE_USER_RECV,
-	FSM_DP_BUF_STATE_LAST,
+enum csm_dp_buf_state {
+	CSM_DP_BUF_STATE_KERNEL_FREE,
+	CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA,
+	CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP,
+	CSM_DP_BUF_STATE_KERNEL_XMIT_DMA,
+	CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP,
+	CSM_DP_BUF_STATE_USER_FREE,
+	CSM_DP_BUF_STATE_USER_ALLOC,
+	CSM_DP_BUF_STATE_USER_RECV,
+	CSM_DP_BUF_STATE_LAST,
 };
 
-typedef unsigned long fsm_dp_ring_element_data_t;
-typedef unsigned int fsm_dp_ring_index_t;
+typedef unsigned long csm_dp_ring_element_data_t;
+typedef unsigned int csm_dp_ring_index_t;
 
-struct fsm_dp_ring_element {
+struct csm_dp_ring_element {
 	uint64_t element_ctrl;	/* 1 entry not valid, 0 valid */
 				/* Other bits for control flags: tbd */
 
-	fsm_dp_ring_element_data_t element_data;
+	csm_dp_ring_element_data_t element_data;
 				/*
 				 * If the ring is used for
-				 * fsm dp buffer management,
+				 * csm dp buffer management,
 				 * ring data is pointing to
-				 * a buffer fsm_dp_msghdr area
+				 * a buffer csm_dp_msghdr area
 				 */
 };
 
-typedef struct fsm_dp_ring_element fsm_dp_ring_element_t;
+typedef struct csm_dp_ring_element csm_dp_ring_element_t;
 
-struct fsm_dp_mmap_cfg {
+struct csm_dp_mmap_cfg {
 	__u64 length;	/* length parameter for mmap */
 	__u32 cookie;	/* last parameter for mmap */
 };
 
-struct fsm_dp_ring_cfg {
-	struct fsm_dp_mmap_cfg mmap;	/* mmap parameters */
+struct csm_dp_ring_cfg {
+	struct csm_dp_mmap_cfg mmap;	/* mmap parameters */
 	__u32 size;			/* ring size */
 	__u32 prod_head_off;		/* page offset of prod_head */
 	__u32 prod_tail_off;		/* page offset of prod_tail */
@@ -240,8 +240,8 @@ struct fsm_dp_ring_cfg {
 	__u32 ringbuf_off;		/* page offset of ring buffer */
 };
 
-struct fsm_dp_mem_cfg {
-	struct fsm_dp_mmap_cfg mmap;	/* mmap parameters */
+struct csm_dp_mem_cfg {
+	struct csm_dp_mmap_cfg mmap;	/* mmap parameters */
 	__u32 buf_sz;			/* size of buffer for user data */
 	__u32 buf_cnt;			/* number of buffer */
 	__u32 buf_overhead_sz;		/*
@@ -262,116 +262,116 @@ struct fsm_dp_mem_cfg {
 	__u32 buf_per_cluster;		/* number of buffers per cluster  */
 };
 
-struct fsm_dp_mempool_cfg {
-	enum fsm_dp_mem_type type;
-	struct fsm_dp_mem_cfg mem;
-	struct fsm_dp_ring_cfg ring;
+struct csm_dp_mempool_cfg {
+	enum csm_dp_mem_type type;
+	struct csm_dp_mem_cfg mem;
+	struct csm_dp_ring_cfg ring;
 };
 
-enum fsm_dp_channel {
-	FSM_DP_CH_CONTROL,
-	FSM_DP_CH_DATA,
+enum csm_dp_channel {
+	CSM_DP_CH_CONTROL,
+	CSM_DP_CH_DATA,
 };
 
-struct fsm_dp_ioctl_mempool_alloc {
-	__u32 type;		/* type defined in enum fsm_dp_mem_type */
+struct csm_dp_ioctl_mempool_alloc {
+	__u32 type;		/* type defined in enum csm_dp_mem_type */
 	__u32 buf_sz;		/* size of buffer */
 	__u32 buf_num;		/* number of buffer */
-	struct fsm_dp_mempool_cfg *cfg;	/* for kernel to return config info */
+	struct csm_dp_mempool_cfg *cfg;	/* for kernel to return config info */
 };
 
-struct fsm_dp_ioctl_getcfg {
+struct csm_dp_ioctl_getcfg {
 	__u32 type;
 	void *cfg;
 };
 
-struct fsm_dp_ioctl_tx {
-	enum fsm_dp_channel ch;
+struct csm_dp_ioctl_tx {
+	enum csm_dp_channel ch;
 	struct iovec iov;
-	__u32 flags;	/* FSM_DP_IOCTL_TX_FLAG_xxx */
+	__u32 flags;	/* CSM_DP_IOCTL_TX_FLAG_xxx */
 };
 
-static inline int fsm_dp_mem_type_is_valid(enum fsm_dp_mem_type type)
+static inline int csm_dp_mem_type_is_valid(enum csm_dp_mem_type type)
 {
-	return (type >= 0 && type < FSM_DP_MEM_TYPE_LAST);
+	return (type >= 0 && type < CSM_DP_MEM_TYPE_LAST);
 }
 
-static inline const char *fsm_dp_mem_type_to_str(enum fsm_dp_mem_type type)
+static inline const char *csm_dp_mem_type_to_str(enum csm_dp_mem_type type)
 {
 	switch (type) {
-	case FSM_DP_MEM_TYPE_DL_CONTROL: return "DL_CTRL";
-	case FSM_DP_MEM_TYPE_DL_DATA: return "DL_DATA";
-	case FSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
-	case FSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
+	case CSM_DP_MEM_TYPE_DL_CONTROL: return "DL_CTRL";
+	case CSM_DP_MEM_TYPE_DL_DATA: return "DL_DATA";
+	case CSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
+	case CSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
 	default: return "unknown";
 	}
 }
 
-static inline int fsm_dp_mmap_type_is_valid(enum fsm_dp_mmap_type type)
+static inline int csm_dp_mmap_type_is_valid(enum csm_dp_mmap_type type)
 {
-	return (type >= 0 && type < FSM_DP_MMAP_TYPE_LAST);
+	return (type >= 0 && type < CSM_DP_MMAP_TYPE_LAST);
 }
 
-static inline const char *fsm_dp_mmap_type_to_str(enum fsm_dp_mmap_type type)
+static inline const char *csm_dp_mmap_type_to_str(enum csm_dp_mmap_type type)
 {
 	switch (type) {
-	case FSM_DP_MMAP_TYPE_MEM: return "Memory";
-	case FSM_DP_MMAP_TYPE_RING: return "Ring";
+	case CSM_DP_MMAP_TYPE_MEM: return "Memory";
+	case CSM_DP_MMAP_TYPE_RING: return "Ring";
 	default: return "unknown";
 	}
 }
 
-static inline int fsm_dp_rx_type_is_valid(enum fsm_dp_rx_type type)
+static inline int csm_dp_rx_type_is_valid(enum csm_dp_rx_type type)
 {
-	return (type >= 0 && type < FSM_DP_RX_TYPE_LAST);
+	return (type >= 0 && type < CSM_DP_RX_TYPE_LAST);
 }
 
-static inline const char *fsm_dp_rx_type_to_str(enum fsm_dp_rx_type type)
+static inline const char *csm_dp_rx_type_to_str(enum csm_dp_rx_type type)
 {
 	switch (type) {
-	case FSM_DP_RX_TYPE_L1: return "L1";
-	case FSM_DP_RX_TYPE_RF: return "RF";
-	case FSM_DP_RX_TYPE_TA: return "TA";
-	case FSM_DP_RX_TYPE_ORU: return "ORU";
-	case FSM_DP_RX_TYPE_LPBK: return "LOOPBACK";
+	case CSM_DP_RX_TYPE_L1: return "L1";
+	case CSM_DP_RX_TYPE_RF: return "RF";
+	case CSM_DP_RX_TYPE_TA: return "TA";
+	case CSM_DP_RX_TYPE_ORU: return "ORU";
+	case CSM_DP_RX_TYPE_LPBK: return "LOOPBACK";
 	default: return "unknown";
 	}
 }
 
 
-static inline const char *fsm_dp_buf_state_to_str(enum fsm_dp_buf_state state)
+static inline const char *csm_dp_buf_state_to_str(enum csm_dp_buf_state state)
 {
 	switch (state) {
-	case FSM_DP_BUF_STATE_KERNEL_FREE:
+	case CSM_DP_BUF_STATE_KERNEL_FREE:
 		return "KERNEL FREE";
-	case FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA:
+	case CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA:
 		return "KERNEL ALLOC RECV DMA";
-	case FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP:
+	case CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP:
 		return "KERNEL RECV CMP MSGQ TO APP";
-	case FSM_DP_BUF_STATE_KERNEL_XMIT_DMA:
+	case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA:
 		return "KERNEL XMIT DMA";
-	case FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP:
+	case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP:
 		return "KERNEL XMIT DMA COMP";
-	case FSM_DP_BUF_STATE_USER_FREE:
+	case CSM_DP_BUF_STATE_USER_FREE:
 		return "USER FREE";
-	case FSM_DP_BUF_STATE_USER_ALLOC:
+	case CSM_DP_BUF_STATE_USER_ALLOC:
 		return "USER ALLOC";
-	case FSM_DP_BUF_STATE_USER_RECV:
+	case CSM_DP_BUF_STATE_USER_RECV:
 		return "USER RECV";
-	case FSM_DP_BUF_STATE_LAST:
+	case CSM_DP_BUF_STATE_LAST:
 	default:
 		return "unknown";
 	};
 }
 
-static inline bool fsm_dp_mem_type_is_ul(enum fsm_dp_mem_type type)
+static inline bool csm_dp_mem_type_is_ul(enum csm_dp_mem_type type)
 {
-	return type == FSM_DP_MEM_TYPE_UL_CONTROL || type == FSM_DP_MEM_TYPE_UL_DATA;
+	return type == CSM_DP_MEM_TYPE_UL_CONTROL || type == CSM_DP_MEM_TYPE_UL_DATA;
 }
 
-static inline bool fsm_dp_mem_type_is_dl(enum fsm_dp_mem_type type)
+static inline bool csm_dp_mem_type_is_dl(enum csm_dp_mem_type type)
 {
-	return type == FSM_DP_MEM_TYPE_DL_CONTROL || type == FSM_DP_MEM_TYPE_DL_DATA;
+	return type == CSM_DP_MEM_TYPE_DL_CONTROL || type == CSM_DP_MEM_TYPE_DL_DATA;
 }
 
-#endif /* __FSM_DP_IOCTL_H__ */
+#endif /* __CSM_DP_IOCTL_H__ */

@@ -15,18 +15,18 @@
 #include "csm_dp.h"
 #include "csm_dp_mem.h"
 
-#define FSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
+#define CSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
 
-static inline struct fsm_dp_mempool *fsm_dp_mem_to_mempool(
-	struct fsm_dp_mem *mem)
+static inline struct csm_dp_mempool *csm_dp_mem_to_mempool(
+	struct csm_dp_mem *mem)
 {
-	struct fsm_dp_mempool *mempool = container_of(mem,
-						   struct fsm_dp_mempool, mem);
+	struct csm_dp_mempool *mempool = container_of(mem,
+						   struct csm_dp_mempool, mem);
 	return mempool;
 }
 
-static inline void fsm_dp_mem_loc_set(
-	struct fsm_dp_mem_loc *loc,
+static inline void csm_dp_mem_loc_set(
+	struct csm_dp_mem_loc *loc,
 	size_t size,
 	unsigned int mmap_cookie)
 {
@@ -39,14 +39,14 @@ static inline void fsm_dp_mem_loc_set(
 static inline int __alloc_ring(
 	size_t size,
 	unsigned int mmap_cookie,
-	struct fsm_dp_mem_loc *loc)
+	struct csm_dp_mem_loc *loc)
 {
 	unsigned int order;
 	struct page *page;
 
 	order = get_order(size);
-	if (order > get_order(FSM_DP_MEMPOOL_CLUSTER_SIZE)) {
-		FSM_DP_ERROR("%s: failed to allocate memory. Too Big %ld\n",
+	if (order > get_order(CSM_DP_MEMPOOL_CLUSTER_SIZE)) {
+		CSM_DP_ERROR("%s: failed to allocate memory. Too Big %ld\n",
 				__func__, size);
 		return -ENOMEM;
 	}
@@ -56,13 +56,13 @@ static inline int __alloc_ring(
 	if (page) {
 		loc->page[0] = page;
 		loc->cluster_kernel_addr[0] = page_address(page);
-		fsm_dp_mem_loc_set(loc, size, mmap_cookie);
+		csm_dp_mem_loc_set(loc, size, mmap_cookie);
 		return 0;
 	}
 	return -ENOMEM;
 }
 
-static inline void __free_ring(struct fsm_dp_mem_loc *loc)
+static inline void __free_ring(struct csm_dp_mem_loc *loc)
 {
 	if (loc && loc->page[0]) {
 		__free_pages(loc->page[0], loc->last_cl_order);
@@ -72,7 +72,7 @@ static inline void __free_ring(struct fsm_dp_mem_loc *loc)
 
 static inline int __buf_mem_alloc(size_t size,
 			      unsigned int mmap_cookie,
-			      struct fsm_dp_mem_loc *loc)
+			      struct csm_dp_mem_loc *loc)
 {
 	unsigned int order;
 	struct page *page;
@@ -84,7 +84,7 @@ static inline int __buf_mem_alloc(size_t size,
 		if (i == loc->num_cluster - 1)
 			len = rem;
 		else
-			len = FSM_DP_MEMPOOL_CLUSTER_SIZE;
+			len = CSM_DP_MEMPOOL_CLUSTER_SIZE;
 		order = get_order(len);
 		if (i == loc->num_cluster - 1)
 			loc->last_cl_order = order;
@@ -95,7 +95,7 @@ static inline int __buf_mem_alloc(size_t size,
 		loc->cluster_kernel_addr[i] = page_address(page);
 		rem -= len;
 	}
-	fsm_dp_mem_loc_set(loc, size, mmap_cookie);
+	csm_dp_mem_loc_set(loc, size, mmap_cookie);
 	return 0;
 error:
 	for (i = 0; i < loc->num_cluster; i++) {
@@ -103,7 +103,7 @@ error:
 			if (i == loc->num_cluster - 1)
 				order = loc->last_cl_order;
 			else
-				order = get_order(FSM_DP_MEMPOOL_CLUSTER_SIZE);
+				order = get_order(CSM_DP_MEMPOOL_CLUSTER_SIZE);
 			__free_pages(loc->page[i], order);
 			loc->page[i] = NULL;
 		}
@@ -112,10 +112,10 @@ error:
 	return -ENOMEM;
 }
 
-static inline void __buf_mem_free(struct fsm_dp_mem_loc *loc)
+static inline void __buf_mem_free(struct csm_dp_mem_loc *loc)
 {
 	int i;
-	unsigned int order = get_order(FSM_DP_MEMPOOL_CLUSTER_SIZE);
+	unsigned int order = get_order(CSM_DP_MEMPOOL_CLUSTER_SIZE);
 
 	if (loc) {
 		for (i = 0; i < loc->num_cluster; i++) {
@@ -133,24 +133,24 @@ static inline void __buf_mem_free(struct fsm_dp_mem_loc *loc)
  * get the MHI controller dev - needed for dma operations. Control and data
  * channels refer to same MHI controller dev.
  */
-struct device *get_mhi_cntrl_dev(struct fsm_dp_dev *pdev)
+struct device *get_mhi_cntrl_dev(struct csm_dp_dev *pdev)
 {
-	if (fsm_dp_mhi_is_ready(&pdev->mhi_control_dev))
+	if (csm_dp_mhi_is_ready(&pdev->mhi_control_dev))
 		return pdev->mhi_control_dev.mhi_dev->mhi_cntrl->cntrl_dev;
-	else if (fsm_dp_mhi_is_ready(&pdev->mhi_data_dev))
+	else if (csm_dp_mhi_is_ready(&pdev->mhi_data_dev))
 		return pdev->mhi_data_dev.mhi_dev->mhi_cntrl->cntrl_dev;
 
 	return NULL;
 }
 
-int fsm_dp_ring_init(
-	struct fsm_dp_ring *ring,
+int csm_dp_ring_init(
+	struct csm_dp_ring *ring,
 	unsigned int ringsz,
 	unsigned int mmap_cookie)
 {
 	unsigned int allocsz = ringsz * sizeof(*ring->element);
 	char *aligned_ptr;
-	fsm_dp_ring_element_t *elem_p;
+	csm_dp_ring_element_t *elem_p;
 	int i;
 
 	/* cons and prod index space, aligned to cache line */
@@ -158,21 +158,21 @@ int fsm_dp_ring_init(
 	allocsz = ALIGN(allocsz, cache_line_size());
 
 	if (__alloc_ring(allocsz, mmap_cookie, &ring->loc)) {
-		FSM_DP_ERROR("%s: failed to allocate ring memory\n", __func__);
+		CSM_DP_ERROR("%s: failed to allocate ring memory\n", __func__);
 		return -ENOMEM;
 	}
 
 	aligned_ptr = (char *)ALIGN((unsigned long)ring->loc.base,
 				    cache_line_size());
-	ring->prod_head = (fsm_dp_ring_index_t *)aligned_ptr;
+	ring->prod_head = (csm_dp_ring_index_t *)aligned_ptr;
 	aligned_ptr += cache_line_size();
-	ring->prod_tail = (fsm_dp_ring_index_t *)aligned_ptr;
+	ring->prod_tail = (csm_dp_ring_index_t *)aligned_ptr;
 	aligned_ptr += cache_line_size();
-	ring->cons_head = (fsm_dp_ring_index_t *)aligned_ptr;
+	ring->cons_head = (csm_dp_ring_index_t *)aligned_ptr;
 	aligned_ptr += cache_line_size();
-	ring->cons_tail = (fsm_dp_ring_index_t *)aligned_ptr;
+	ring->cons_tail = (csm_dp_ring_index_t *)aligned_ptr;
 	aligned_ptr += cache_line_size();
-	ring->element = elem_p = (fsm_dp_ring_element_t *)aligned_ptr;
+	ring->element = elem_p = (csm_dp_ring_element_t *)aligned_ptr;
 	for (i = 0; i < ringsz; i++, elem_p++)
 		elem_p->element_ctrl = 1; /* not valid */
 	ring->size = ringsz;
@@ -181,7 +181,7 @@ int fsm_dp_ring_init(
 	return 0;
 }
 
-void fsm_dp_ring_cleanup(struct fsm_dp_ring *ring)
+void csm_dp_ring_cleanup(struct csm_dp_ring *ring)
 {
 	if (ring) {
 		__free_ring(&ring->loc);
@@ -189,7 +189,7 @@ void fsm_dp_ring_cleanup(struct fsm_dp_ring *ring)
 	}
 }
 
-int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
+int csm_dp_ring_get_cfg(struct csm_dp_ring *ring, struct csm_dp_ring_cfg *cfg)
 {
 	if (unlikely(ring == NULL || cfg == NULL))
 		return -EINVAL;
@@ -211,13 +211,13 @@ int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
 }
 
 /* Read from ring */
-int fsm_dp_ring_read(
-	struct fsm_dp_ring *ring,
-	fsm_dp_ring_element_data_t *element_ptr, unsigned int *flag)
+int csm_dp_ring_read(
+	struct csm_dp_ring *ring,
+	csm_dp_ring_element_data_t *element_ptr, unsigned int *flag)
 {
-	register fsm_dp_ring_index_t cons_head, cons_next, cons_tail;
-	register fsm_dp_ring_index_t prod_tail, mask;
-	fsm_dp_ring_element_data_t data;
+	register csm_dp_ring_index_t cons_head, cons_next, cons_tail;
+	register csm_dp_ring_index_t prod_tail, mask;
+	csm_dp_ring_element_data_t data;
 
 	if (unlikely(ring == NULL))
 		return -EINVAL;
@@ -298,11 +298,11 @@ repeat:
 }
 
 /* Write to ring */
-int fsm_dp_ring_write(struct fsm_dp_ring *ring, fsm_dp_ring_element_data_t data,
+int csm_dp_ring_write(struct csm_dp_ring *ring, csm_dp_ring_element_data_t data,
 		unsigned int flag)
 {
-	register fsm_dp_ring_index_t prod_head, prod_next, prod_tail;
-	register fsm_dp_ring_index_t cons_tail, mask;
+	register csm_dp_ring_index_t prod_head, prod_next, prod_tail;
+	register csm_dp_ring_index_t cons_tail, mask;
 
 	if (unlikely(ring == NULL))
 		return -EINVAL;
@@ -328,7 +328,7 @@ again:
 		goto again;
 	}
 
-#ifdef CONFIG_FSM_DP_TEST
+#ifdef CONFIG_CSM_DP_TEST
 	if (data == TEST_RING_WRITE_MAGIC_VALUE)
 		data = prod_head << 1;
 #endif
@@ -378,9 +378,9 @@ repeat:
 	goto repeat;
 }
 
-bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring)
+bool csm_dp_ring_is_empty(struct csm_dp_ring *ring)
 {
-	fsm_dp_ring_index_t prod_tail, cons_tail;
+	csm_dp_ring_index_t prod_tail, cons_tail;
 
 	prod_tail = *ring->prod_tail;
 	cons_tail = *ring->cons_tail;
@@ -389,8 +389,8 @@ bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring)
 	return false;
 }
 
-static int fsm_dp_mem_init(
-	struct fsm_dp_mem *mem,
+static int csm_dp_mem_init(
+	struct csm_dp_mem *mem,
 	unsigned int bufcnt,
 	unsigned int bufsz,
 	unsigned int cookie)
@@ -403,45 +403,45 @@ static int fsm_dp_mem_init(
 
 	mem->buf_cnt = bufcnt;
 	mem->buf_sz = ALIGN(bufsz, cache_line_size());
-	mem->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
+	mem->buf_overhead_sz = CSM_DP_L1_CACHE_BYTES;
 
-	if (fsm_dp_buf_true_size(mem) > FSM_DP_MEMPOOL_CLUSTER_SIZE) {
-		FSM_DP_ERROR("%s: buf_true_size too big %d (CLUSTER_SIZE %d)\n",
-			__func__, fsm_dp_buf_true_size(mem), FSM_DP_MEMPOOL_CLUSTER_SIZE);
+	if (csm_dp_buf_true_size(mem) > CSM_DP_MEMPOOL_CLUSTER_SIZE) {
+		CSM_DP_ERROR("%s: buf_true_size too big %d (CLUSTER_SIZE %d)\n",
+			__func__, csm_dp_buf_true_size(mem), CSM_DP_MEMPOOL_CLUSTER_SIZE);
 		return -ENOMEM;
 	}
 
-	num_buf_cl = FSM_DP_MEMPOOL_CLUSTER_SIZE / fsm_dp_buf_true_size(mem);
+	num_buf_cl = CSM_DP_MEMPOOL_CLUSTER_SIZE / csm_dp_buf_true_size(mem);
 	num_cl = bufcnt / num_buf_cl;
-	size = (long)num_cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+	size = (long)num_cl * CSM_DP_MEMPOOL_CLUSTER_SIZE;
 	rem_buf = bufcnt % num_buf_cl;
 	if (rem_buf) {
 		num_cl++;
-		rem_size = fsm_dp_buf_true_size(mem) * rem_buf;
+		rem_size = csm_dp_buf_true_size(mem) * rem_buf;
 	}
-	if (num_cl > MAX_FSM_DP_MEMPOOL_CLUSTERS) {
-		FSM_DP_ERROR("%s: mempool size too big. num_cl %d\n", __func__, num_cl);
+	if (num_cl > MAX_CSM_DP_MEMPOOL_CLUSTERS) {
+		CSM_DP_ERROR("%s: mempool size too big. num_cl %d\n", __func__, num_cl);
 		return -ENOMEM;
 	}
-	if (ULONG_MAX / FSM_DP_MEMPOOL_CLUSTER_SIZE < num_cl) {
-		FSM_DP_ERROR("%s: mempool size too big. num_cl %d CLUSTER_SIZE %d\n",
-			__func__, num_cl, FSM_DP_MEMPOOL_CLUSTER_SIZE);
+	if (ULONG_MAX / CSM_DP_MEMPOOL_CLUSTER_SIZE < num_cl) {
+		CSM_DP_ERROR("%s: mempool size too big. num_cl %d CLUSTER_SIZE %d\n",
+			__func__, num_cl, CSM_DP_MEMPOOL_CLUSTER_SIZE);
 		return -ENOMEM;
 	}
 	mem->loc.num_cluster = num_cl;
 	mem->loc.buf_per_cluster = num_buf_cl;
 	size += rem_size;
 	if (__buf_mem_alloc(size, cookie, &mem->loc)) {
-		FSM_DP_ERROR("%s: failed to allocate DMA memory\n", __func__);
+		CSM_DP_ERROR("%s: failed to allocate DMA memory\n", __func__);
 		return -ENOMEM;
 	}
 	return 0;
 }
 
-static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
+static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 {
-	struct fsm_dp_mempool *mempool = fsm_dp_mem_to_mempool(mem);
-	struct fsm_dp_dev *pdev = mempool->dp_dev;
+	struct csm_dp_mempool *mempool = csm_dp_mem_to_mempool(mem);
+	struct csm_dp_dev *pdev = mempool->dp_dev;
 	int i;
 	unsigned int size;
 
@@ -459,9 +459,9 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 				dma_unmap_single(
 					get_mhi_cntrl_dev(pdev),
 					mem->loc.cluster_dma_addr[i],
-					FSM_DP_MEMPOOL_CLUSTER_SIZE,
+					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
-				size -= FSM_DP_MEMPOOL_CLUSTER_SIZE;
+				size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 			}
 		}
 	}
@@ -472,38 +472,38 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 	memset(mem, 0, sizeof(*mem));
 }
 
-static int fsm_dp_mem_get_cfg(
-	struct fsm_dp_mem *mem,
-	struct fsm_dp_mem_cfg *cfg)
+static int csm_dp_mem_get_cfg(
+	struct csm_dp_mem *mem,
+	struct csm_dp_mem_cfg *cfg)
 {
 	cfg->mmap.length = mem->loc.size;
 	cfg->mmap.cookie = mem->loc.cookie;
 
 	cfg->buf_sz = mem->buf_sz;
 	cfg->buf_cnt = mem->buf_cnt;
-	cfg->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
-	cfg->cluster_size = FSM_DP_MEMPOOL_CLUSTER_SIZE;
+	cfg->buf_overhead_sz = CSM_DP_L1_CACHE_BYTES;
+	cfg->cluster_size = CSM_DP_MEMPOOL_CLUSTER_SIZE;
 	cfg->num_cluster = mem->loc.num_cluster;
 	cfg->buf_per_cluster = mem->loc.buf_per_cluster;
 	return 0;
 }
 
-static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
+static void csm_dp_mempool_init(struct csm_dp_mempool *mempool)
 {
-	struct fsm_dp_mem *mem = &mempool->mem;
-	struct fsm_dp_ring *ring = &mempool->ring;
-	fsm_dp_ring_element_data_t element_data;
+	struct csm_dp_mem *mem = &mempool->mem;
+	struct csm_dp_ring *ring = &mempool->ring;
+	csm_dp_ring_element_data_t element_data;
 	int i, j;
-	struct fsm_dp_buf_cntrl *p;
+	struct csm_dp_buf_cntrl *p;
 	unsigned int cl_buf_cnt;
 	unsigned int buf_index = 0;
 	char *cl_start;
 
-	if (!fsm_dp_mem_type_is_valid(mempool->type))
+	if (!csm_dp_mem_type_is_valid(mempool->type))
 		return;
 
 	for (j = 0; j < mem->loc.num_cluster; j++) {
-		element_data = (long)j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+		element_data = (long)j * CSM_DP_MEMPOOL_CLUSTER_SIZE;
 		cl_start = mem->loc.cluster_kernel_addr[j];
 		if (j == mem->loc.num_cluster - 1)
 			cl_buf_cnt = mem->buf_cnt -
@@ -511,22 +511,22 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 		else
 			cl_buf_cnt = mem->loc.buf_per_cluster;
 		for (i = 0; i < cl_buf_cnt; i++) {
-			p = (struct fsm_dp_buf_cntrl *) (cl_start +
-				(i * fsm_dp_buf_true_size(mem)));
-			p->signature = FSM_DP_BUFFER_SIG;
-			p->fence = FSM_DP_BUFFER_FENCE_SIG;
-			p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
+			p = (struct csm_dp_buf_cntrl *) (cl_start +
+				(i * csm_dp_buf_true_size(mem)));
+			p->signature = CSM_DP_BUFFER_SIG;
+			p->fence = CSM_DP_BUFFER_FENCE_SIG;
+			p->state = CSM_DP_BUF_STATE_KERNEL_FREE;
 			p->mem_type = mempool->type;
 			p->buf_index = buf_index;
 			p->next_packet = NULL;
-			if (!fsm_dp_mem_type_is_ul(mempool->type))
-				p->xmit_status = FSM_DP_XMIT_OK;
+			if (!csm_dp_mem_type_is_ul(mempool->type))
+				p->xmit_status = CSM_DP_XMIT_OK;
 			/* pointing to start of user data */
 			ring->element[buf_index].element_data =
 				element_data + mem->buf_overhead_sz;
 			/* entry valid */
 			ring->element[buf_index].element_ctrl = 0;
-			element_data += fsm_dp_buf_true_size(mem);
+			element_data += csm_dp_buf_true_size(mem);
 			buf_index++;
 		}
 	}
@@ -535,32 +535,32 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 	wmb();	/* Ensure all the data are written */
 }
 
-static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
-	struct fsm_dp_dev *pdev,
-	enum fsm_dp_mem_type type,
+static struct csm_dp_mempool *__csm_dp_mempool_alloc(
+	struct csm_dp_dev *pdev,
+	enum csm_dp_mem_type type,
 	unsigned int buf_sz,
 	unsigned int buf_cnt,
 	unsigned int ring_sz,
 	bool may_map)
 {
-	struct fsm_dp_mempool *mempool;
+	struct csm_dp_mempool *mempool;
 	unsigned int cookie;
 
 	mempool = kzalloc(sizeof(*mempool), GFP_KERNEL);
 	if (IS_ERR(mempool)) {
-		FSM_DP_ERROR("%s: failed to allocate mempool\n", __func__);
+		CSM_DP_ERROR("%s: failed to allocate mempool\n", __func__);
 		return NULL;
 	}
 
 	mempool->dp_dev = pdev;
 	mempool->type = type;
-	mempool->signature = FSM_DP_MEMPOOL_SIG;
+	mempool->signature = CSM_DP_MEMPOOL_SIG;
 
 	/*
 	 * allocate dummy buffer for out of buffer condition
-	 * if FSM_DP_MEM_TYPE_UL_* pool
+	 * if CSM_DP_MEM_TYPE_UL_* pool
 	 */
-	if (fsm_dp_mem_type_is_ul(type)) {
+	if (csm_dp_mem_type_is_ul(type)) {
 		mempool->dummy_buf = kzalloc(buf_sz, GFP_KERNEL);
 		if (IS_ERR(mempool->dummy_buf)) {
 			mempool->dummy_buf = NULL;
@@ -568,56 +568,56 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 		}
 	}
 
-	cookie = MMAP_COOKIE(type, FSM_DP_MMAP_TYPE_MEM);
-	if (fsm_dp_mem_init(&mempool->mem, buf_cnt, buf_sz, cookie)) {
-		FSM_DP_ERROR("%s: failed to initialize memory\n", __func__);
+	cookie = MMAP_COOKIE(type, CSM_DP_MMAP_TYPE_MEM);
+	if (csm_dp_mem_init(&mempool->mem, buf_cnt, buf_sz, cookie)) {
+		CSM_DP_ERROR("%s: failed to initialize memory\n", __func__);
 		goto cleanup;
 	}
 
 	if (may_map) {
 		struct device *dev = get_mhi_cntrl_dev(pdev);
 
-		if (dev && fsm_dp_mempool_dma_map(dev, mempool))
+		if (dev && csm_dp_mempool_dma_map(dev, mempool))
 			goto cleanup_mem;
 	}
-	cookie = MMAP_COOKIE(type, FSM_DP_MMAP_TYPE_RING);
-	if (fsm_dp_ring_init(&mempool->ring, ring_sz, cookie)) {
-		FSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
+	cookie = MMAP_COOKIE(type, CSM_DP_MMAP_TYPE_RING);
+	if (csm_dp_ring_init(&mempool->ring, ring_sz, cookie)) {
+		CSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
 		goto cleanup_mem;
 	}
 
-	fsm_dp_mempool_init(mempool);
+	csm_dp_mempool_init(mempool);
 
-	FSM_DP_DEBUG("%s: mempool is created, type=%u bufsz=%u bufcnt=%u\n",
+	CSM_DP_DEBUG("%s: mempool is created, type=%u bufsz=%u bufcnt=%u\n",
 		  __func__, type, buf_sz, buf_cnt);
 
 	return mempool;
 
 cleanup_mem:
-	fsm_dp_mem_cleanup(&mempool->mem);
+	csm_dp_mem_cleanup(&mempool->mem);
 cleanup:
 	kfree(mempool->dummy_buf);
 	kfree(mempool);
 	return NULL;
 }
 
-static void fsm_dp_mempool_release(struct fsm_dp_mempool *mempool)
+static void csm_dp_mempool_release(struct csm_dp_mempool *mempool)
 {
 	if (mempool) {
-		enum fsm_dp_mem_type type = mempool->type;
+		enum csm_dp_mem_type type = mempool->type;
 
-		mempool->signature = FSM_DP_MEMPOOL_SIG_BAD;
+		mempool->signature = CSM_DP_MEMPOOL_SIG_BAD;
 		wmb();
-		fsm_dp_mem_cleanup(&mempool->mem);
-		fsm_dp_ring_cleanup(&mempool->ring);
+		csm_dp_mem_cleanup(&mempool->mem);
+		csm_dp_ring_cleanup(&mempool->ring);
 		kfree(mempool->dummy_buf);
 		kfree(mempool);
-		FSM_DP_DEBUG("%s: mempool is freed, type=%u\n", __func__, type);
+		CSM_DP_DEBUG("%s: mempool is freed, type=%u\n", __func__, type);
 	}
 }
 
-#define FSM_DP_MEMPOOL_RELEASE_SLEEP 200 /* 200 ms */
-void fsm_dp_mempool_release_no_delay(struct fsm_dp_mempool *mempool)
+#define CSM_DP_MEMPOOL_RELEASE_SLEEP 200 /* 200 ms */
+void csm_dp_mempool_release_no_delay(struct csm_dp_mempool *mempool)
 {
 	unsigned int out_xmit, out_xmit1;
 
@@ -627,30 +627,30 @@ void fsm_dp_mempool_release_no_delay(struct fsm_dp_mempool *mempool)
 
 	out_xmit1 = atomic_read(&mempool->out_xmit);
 	if (out_xmit1) {
-		msleep(FSM_DP_MEMPOOL_RELEASE_SLEEP);
+		msleep(CSM_DP_MEMPOOL_RELEASE_SLEEP);
 		out_xmit = atomic_read(&mempool->out_xmit);
 		if (out_xmit)
-			FSM_DP_ERROR(
+			CSM_DP_ERROR(
 				"mempool %p out_xmit changed from %d to %d after %d ms\n",
-				mempool, out_xmit1, out_xmit, FSM_DP_MEMPOOL_RELEASE_SLEEP);
+				mempool, out_xmit1, out_xmit, CSM_DP_MEMPOOL_RELEASE_SLEEP);
 	}
 
-	fsm_dp_mempool_release(mempool);
+	csm_dp_mempool_release(mempool);
 }
 
-int fsm_dp_mempool_dma_map(
+int csm_dp_mempool_dma_map(
 	struct device *dev,	/* device for iommu ops */
-	struct fsm_dp_mempool *mpool)
+	struct csm_dp_mempool *mpool)
 {
 	enum dma_data_direction direction;
 	int i, k;
 	unsigned int size;
-	struct fsm_dp_mem_loc *loc;
+	struct csm_dp_mem_loc *loc;
 
 	loc = &mpool->mem.loc;
 	if (loc->dma_mapped)
 		return 0;
-	if (fsm_dp_mem_type_is_ul(mpool->type))
+	if (csm_dp_mem_type_is_ul(mpool->type))
 		direction = DMA_BIDIRECTIONAL; /* rx, tx for rx loopback */
 	else
 		direction = DMA_TO_DEVICE;
@@ -666,9 +666,9 @@ int fsm_dp_mempool_dma_map(
 			loc->cluster_dma_addr[i] =
 				dma_map_single(dev,
 					loc->cluster_kernel_addr[i],
-					FSM_DP_MEMPOOL_CLUSTER_SIZE,
+					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					direction);
-			size -= FSM_DP_MEMPOOL_CLUSTER_SIZE;
+			size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 		}
 		if (dma_mapping_error(dev, loc->cluster_dma_addr[i]))
 			goto error;
@@ -679,29 +679,29 @@ int fsm_dp_mempool_dma_map(
 error:
 	for (k = 0; k < i - 1; k++) {
 		dma_unmap_single(dev, loc->cluster_dma_addr[k],
-			FSM_DP_MEMPOOL_CLUSTER_SIZE,
+			CSM_DP_MEMPOOL_CLUSTER_SIZE,
 			loc->direction);
 	}
 	return -ENOMEM;
 }
 
-struct fsm_dp_mempool *fsm_dp_mempool_alloc(
-	struct fsm_dp_dev *pdev,
-	enum fsm_dp_mem_type type,
+struct csm_dp_mempool *csm_dp_mempool_alloc(
+	struct csm_dp_dev *pdev,
+	enum csm_dp_mem_type type,
 	unsigned int buf_sz,
 	unsigned int buf_cnt,
 	bool may_dma_map)
 {
-	struct fsm_dp_mempool *mempool;
+	struct csm_dp_mempool *mempool;
 	unsigned int ring_sz;
 
-	if (unlikely(!buf_sz || !buf_cnt || !fsm_dp_mem_type_is_valid(type)))
+	if (unlikely(!buf_sz || !buf_cnt || !csm_dp_mem_type_is_valid(type)))
 		return NULL;
-	if (unlikely(((ULONG_MAX) / (buf_sz + FSM_DP_L1_CACHE_BYTES) < buf_cnt)))
+	if (unlikely(((ULONG_MAX) / (buf_sz + CSM_DP_L1_CACHE_BYTES) < buf_cnt)))
 		return NULL;
-	if (buf_sz > FSM_DP_MAX_DL_MSG_LEN) {
-		FSM_DP_ERROR("%s: mempool alloc buffer size %d exceeds limit %d\n",
-			__func__, buf_sz, FSM_DP_MAX_DL_MSG_LEN);
+	if (buf_sz > CSM_DP_MAX_DL_MSG_LEN) {
+		CSM_DP_ERROR("%s: mempool alloc buffer size %d exceeds limit %d\n",
+			__func__, buf_sz, CSM_DP_MAX_DL_MSG_LEN);
 		return NULL;
 	}
 	/* TODO: return in case of race with mhi_xxx_dev getting destroyed */
@@ -713,10 +713,10 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	mutex_lock(&pdev->mempool_lock);
 	mempool = pdev->mempool[type];
 	if (mempool) {
-		if (!fsm_dp_mem_type_is_ul(type) &&
+		if (!csm_dp_mem_type_is_ul(type) &&
 			(buf_sz > mempool->mem.buf_sz ||
 				buf_cnt > mempool->mem.buf_cnt)) {
-			FSM_DP_ERROR(
+			CSM_DP_ERROR(
 				"%s: can't use existing mempool, type=%u\n",
 				__func__, type);
 			mempool = NULL;
@@ -725,7 +725,7 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 		goto mempool_hold;
 	}
 
-	mempool = __fsm_dp_mempool_alloc(pdev, type, buf_sz,
+	mempool = __csm_dp_mempool_alloc(pdev, type, buf_sz,
 					buf_cnt, ring_sz, may_dma_map);
 	if (mempool == NULL)
 		goto done;
@@ -735,35 +735,35 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	pdev->mempool[type] = mempool;
 	goto done;
 mempool_hold:
-	if (!fsm_dp_mempool_hold(mempool))
+	if (!csm_dp_mempool_hold(mempool))
 		mempool = NULL;
 done:
 	mutex_unlock(&pdev->mempool_lock);
 	return mempool;
 }
 
-void fsm_dp_mempool_free(struct fsm_dp_mempool *mempool)
+void csm_dp_mempool_free(struct csm_dp_mempool *mempool)
 {
-	struct fsm_dp_dev *pdev = mempool->dp_dev;
+	struct csm_dp_dev *pdev = mempool->dp_dev;
 
 	if (!mempool)
 		return;
-	fsm_dp_mempool_release_no_delay(mempool);
+	csm_dp_mempool_release_no_delay(mempool);
 	pdev->mempool[mempool->type] = NULL;
 	wmb();
 	return;
 }
 
-void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev)
+void csm_dp_mempool_dev_destroy(struct csm_dp_dev *pdev)
 {
-	struct fsm_dp_mempool *mempool;
+	struct csm_dp_mempool *mempool;
 	int i;
 	int j;
 	unsigned int size;
-	struct fsm_dp_mem *mem;
+	struct csm_dp_mem *mem;
 
 
-	for (j = 0; j < FSM_DP_MEM_TYPE_LAST; j++) {
+	for (j = 0; j < CSM_DP_MEM_TYPE_LAST; j++) {
 		mempool = pdev->mempool[j];
 		if (!mempool)
 			continue;
@@ -783,9 +783,9 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev)
 					dma_unmap_single(
 						get_mhi_cntrl_dev(pdev),
 						mem->loc.cluster_dma_addr[i],
-						FSM_DP_MEMPOOL_CLUSTER_SIZE,
+						CSM_DP_MEMPOOL_CLUSTER_SIZE,
 						mem->loc.direction);
-					size -= FSM_DP_MEMPOOL_CLUSTER_SIZE;
+					size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 				}
 			}
 			mem->loc.dma_mapped = false;
@@ -794,26 +794,26 @@ void fsm_dp_mempool_dev_destroy(struct fsm_dp_dev *pdev)
 	}
 }
 
-int fsm_dp_mempool_get_cfg(
-	struct fsm_dp_mempool *mempool,
-	struct fsm_dp_mempool_cfg *cfg)
+int csm_dp_mempool_get_cfg(
+	struct csm_dp_mempool *mempool,
+	struct csm_dp_mempool_cfg *cfg)
 {
 	if (unlikely(mempool == NULL || cfg == NULL))
 		return -EINVAL;
 
 	cfg->type = mempool->type;
-	fsm_dp_mem_get_cfg(&mempool->mem, &cfg->mem);
-	fsm_dp_ring_get_cfg(&mempool->ring, &cfg->ring);
+	csm_dp_mem_get_cfg(&mempool->mem, &cfg->mem);
+	csm_dp_ring_get_cfg(&mempool->ring, &cfg->ring);
 	return 0;
 }
 
-/* For FSM_DP_MEM_TYPE_UL_* pool only */
-int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
+/* For CSM_DP_MEM_TYPE_UL_* pool only */
+int csm_dp_mempool_put_buf(struct csm_dp_mempool *mempool, void *vaddr)
 {
-	struct fsm_dp_mem *mem;
+	struct csm_dp_mem *mem;
 	unsigned long offset;
 	int ret;
-	struct fsm_dp_buf_cntrl *p;
+	struct csm_dp_buf_cntrl *p;
 	unsigned int buf_index;
 	unsigned int cluster;
 
@@ -824,38 +824,38 @@ int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 	p = (vaddr - mem->buf_overhead_sz);
 	buf_index = p->buf_index;
 	if (buf_index >= mem->buf_cnt) {
-		FSM_DP_ERROR("%s: buf_index %d exceed %d\n", __func__,
+		CSM_DP_ERROR("%s: buf_index %d exceed %d\n", __func__,
 				buf_index, mem->buf_cnt);
 		return -EINVAL;
 	}
 	cluster = buf_index / mem->loc.buf_per_cluster;
-	offset = ((long)cluster * FSM_DP_MEMPOOL_CLUSTER_SIZE) +
+	offset = ((long)cluster * CSM_DP_MEMPOOL_CLUSTER_SIZE) +
 			(buf_index % mem->loc.buf_per_cluster) *
-					fsm_dp_buf_true_size(mem);
-#ifdef FSM_DP_BUFFER_FENCING
-	if (p->signature != FSM_DP_BUFFER_SIG) {
+					csm_dp_buf_true_size(mem);
+#ifdef CSM_DP_BUFFER_FENCING
+	if (p->signature != CSM_DP_BUFFER_SIG) {
 		mempool->stats.invalid_buf_put++;
-		FSM_DP_ERROR("%s: mempool %llx type %d buffer at "
+		CSM_DP_ERROR("%s: mempool %llx type %d buffer at "
 			"offset %ld corrupted, sig %x, exp %x\n",
 			__func__, (u64) mempool, mempool->type,
-			offset, p->signature, FSM_DP_BUFFER_SIG);
+			offset, p->signature, CSM_DP_BUFFER_SIG);
 		return -EINVAL;
 	}
-	if (p->fence != FSM_DP_BUFFER_FENCE_SIG) {
+	if (p->fence != CSM_DP_BUFFER_FENCE_SIG) {
 		mempool->stats.invalid_buf_put++;
-		FSM_DP_ERROR("%s: mempool %llx type %d buffer at "
+		CSM_DP_ERROR("%s: mempool %llx type %d buffer at "
 			"offset %ld corrupted, fence %x, exp %x\n",
 			__func__, (u64) mempool, mempool->type,
-			offset, p->fence, FSM_DP_BUFFER_FENCE_SIG);
-		FSM_DP_ERROR("%s: vaddr %llx  p %llx\n",
+			offset, p->fence, CSM_DP_BUFFER_FENCE_SIG);
+		CSM_DP_ERROR("%s: vaddr %llx  p %llx\n",
 			__func__, (u64) vaddr, (u64) p);
 		return -EINVAL;
 	}
-	p->state = FSM_DP_BUF_STATE_KERNEL_FREE;
+	p->state = CSM_DP_BUF_STATE_KERNEL_FREE;
 #endif
-	offset += sizeof(struct fsm_dp_buf_cntrl);
+	offset += sizeof(struct csm_dp_buf_cntrl);
 
-	ret = fsm_dp_ring_write(&mempool->ring, (fsm_dp_ring_element_data_t)offset, 0);
+	ret = csm_dp_ring_write(&mempool->ring, (csm_dp_ring_element_data_t)offset, 0);
 	if (ret)
 		mempool->stats.buf_put_err++;
 	else
@@ -864,53 +864,53 @@ int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 	return ret;
 }
 
-/* For FSM_DP_MEM_TYPE_UL_* pool only */
-void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
+/* For CSM_DP_MEM_TYPE_UL_* pool only */
+void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 				unsigned int *cluster,  unsigned int *c_offset)
 {
-	struct fsm_dp_mem *mem;
-	fsm_dp_ring_element_data_t val;
+	struct csm_dp_mem *mem;
+	csm_dp_ring_element_data_t val;
 	unsigned int flag;
 	void *ptr;
-#ifdef FSM_DP_BUFFER_FENCING
-	struct fsm_dp_buf_cntrl *p;
+#ifdef CSM_DP_BUFFER_FENCING
+	struct csm_dp_buf_cntrl *p;
 #endif
 
 	if (unlikely(mempool == NULL))
 		return NULL;
 
-	if (fsm_dp_ring_read(&mempool->ring, &val, &flag)) {
+	if (csm_dp_ring_read(&mempool->ring, &val, &flag)) {
 		mempool->stats.buf_get_err++;
 		return NULL;
 	}
 
 	mem = &mempool->mem;
-	*cluster = val >> FSM_DP_MEMPOOL_CLUSTER_SHIFT;
-	*c_offset = val & FSM_DP_MEMPOOL_CLUSTER_MASK;
+	*cluster = val >> CSM_DP_MEMPOOL_CLUSTER_SHIFT;
+	*c_offset = val & CSM_DP_MEMPOOL_CLUSTER_MASK;
 	ptr = (char *)mempool->mem.loc.cluster_kernel_addr[*cluster] +
 								*c_offset;
-	if ((*c_offset - mem->buf_overhead_sz) % fsm_dp_buf_true_size(mem)) {
+	if ((*c_offset - mem->buf_overhead_sz) % csm_dp_buf_true_size(mem)) {
 		mempool->stats.invalid_buf_get++;
-		FSM_DP_ERROR("%s: get unaligned buffer from ring, buf true size %d offset %d\n",
-			__func__, fsm_dp_buf_true_size(mem), *c_offset);
+		CSM_DP_ERROR("%s: get unaligned buffer from ring, buf true size %d offset %d\n",
+			__func__, csm_dp_buf_true_size(mem), *c_offset);
 		return NULL;
 	}
-#ifdef FSM_DP_BUFFER_FENCING
+#ifdef CSM_DP_BUFFER_FENCING
 	p = ptr - mem->buf_overhead_sz;
-	if (p->signature !=  FSM_DP_BUFFER_SIG) {
+	if (p->signature !=  CSM_DP_BUFFER_SIG) {
 		mempool->stats.invalid_buf_get++;
-		FSM_DP_ERROR("%s: mempool type %d buffer "
+		CSM_DP_ERROR("%s: mempool type %d buffer "
 			"at %d corrupted, %x, exp %x\n",
 			__func__, *c_offset, mempool->type,
-			p->signature, FSM_DP_BUFFER_SIG);
+			p->signature, CSM_DP_BUFFER_SIG);
 		return NULL;
 	}
-	if (p->fence !=  FSM_DP_BUFFER_FENCE_SIG) {
+	if (p->fence !=  CSM_DP_BUFFER_FENCE_SIG) {
 		mempool->stats.invalid_buf_get++;
-		FSM_DP_ERROR("%s: mempool type %d "
+		CSM_DP_ERROR("%s: mempool type %d "
 			"buffer at %d corrupted, fence %x, exp %x\n",
 			__func__, *c_offset, mempool->type,
-			p->fence, FSM_DP_BUFFER_FENCE_SIG);
+			p->fence, CSM_DP_BUFFER_FENCE_SIG);
 		return NULL;
 	}
 #endif
@@ -918,14 +918,14 @@ void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
 	return ptr;
 }
 
-struct fsm_dp_mempool *fsm_dp_get_mempool(
-	struct fsm_dp_dev *pdev,
-	struct fsm_dp_buf_cntrl *buf_cntrl,
+struct csm_dp_mempool *csm_dp_get_mempool(
+	struct csm_dp_dev *pdev,
+	struct csm_dp_buf_cntrl *buf_cntrl,
 	unsigned int *cluster)
 {
-	struct fsm_dp_mempool *mempool;
+	struct csm_dp_mempool *mempool;
 
-	if (!fsm_dp_mem_type_is_valid(buf_cntrl->mem_type))
+	if (!csm_dp_mem_type_is_valid(buf_cntrl->mem_type))
 		return NULL;
 
 	mempool = pdev->mempool[buf_cntrl->mem_type];
@@ -936,36 +936,36 @@ struct fsm_dp_mempool *fsm_dp_get_mempool(
 		return NULL;
 
 	if (cluster)
-		*cluster = fsm_dp_mem_get_cluster(&mempool->mem, buf_cntrl->buf_index);
+		*cluster = csm_dp_mem_get_cluster(&mempool->mem, buf_cntrl->buf_index);
 
 	return mempool;
 }
 
-uint16_t fsm_dp_mem_get_cluster(struct fsm_dp_mem *mem, unsigned int buf_index)
+uint16_t csm_dp_mem_get_cluster(struct csm_dp_mem *mem, unsigned int buf_index)
 {
-	FSM_DP_ASSERT(buf_index >= U16_MAX * mem->loc.buf_per_cluster, "invalid buf_index");
+	CSM_DP_ASSERT(buf_index >= U16_MAX * mem->loc.buf_per_cluster, "invalid buf_index");
 	return buf_index / mem->loc.buf_per_cluster;
 }
 
-#define FSM_DP_SYNC_THRESHOLD 4
-bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_dev *pdev)
+#define CSM_DP_SYNC_THRESHOLD 4
+bool csm_dp_mem_ul_ring_sync(struct csm_dp_dev *pdev)
 {
-	struct fsm_dp_mempool *mempool = pdev->mempool[FSM_DP_MEM_TYPE_UL_CONTROL];
-	struct fsm_dp_ring *ring = &mempool->ring;
+	struct csm_dp_mempool *mempool = pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL];
+	struct csm_dp_ring *ring = &mempool->ring;
 
-	if (*ring->prod_tail != pdev->fsm_dp_prev_ul_prod_tail) {
-		pdev->fsm_dp_outbuf_drop_sync = 0;
-		pdev->fsm_dp_prev_ul_prod_tail = *ring->prod_tail;
+	if (*ring->prod_tail != pdev->csm_dp_prev_ul_prod_tail) {
+		pdev->csm_dp_outbuf_drop_sync = 0;
+		pdev->csm_dp_prev_ul_prod_tail = *ring->prod_tail;
 		return false;
 	}
-	if (pdev->fsm_dp_outbuf_drop_sync++ >= FSM_DP_SYNC_THRESHOLD) {
+	if (pdev->csm_dp_outbuf_drop_sync++ >= CSM_DP_SYNC_THRESHOLD) {
 
 		if (*ring->prod_tail != *ring->prod_head) {
 			pr_warn("%s prod head %d prod tail %d\n", __func__,
 				*ring->prod_head, *ring->prod_tail);
 			*ring->prod_tail = *ring->prod_head;
 			wmb();
-			pdev->fsm_dp_outbuf_drop_sync = 0;
+			pdev->csm_dp_outbuf_drop_sync = 0;
 			return true;
 		}
 	}

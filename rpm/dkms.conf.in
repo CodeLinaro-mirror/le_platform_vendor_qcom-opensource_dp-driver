@@ -4,8 +4,8 @@ PACKAGE_SH_VERSION=PKG_SHORT_VERSION
 
 MAKE[0]="make DP_MODULE_VERSION=PKG_LONG_VERSION KBUILD_EXTRA_SYMBOLS=mhi-syms/Module.symvers MHI_BUILD_ROOT=/usr/src/mhi-host-PKG_SHORT_VERSION/mhi-host"
 
-BUILT_MODULE_NAME[0]=fsm_dp
-BUILT_MODULE_LOCATION[0]=dp-driver/drivers/char/fsm-dp
+BUILT_MODULE_NAME[0]=csm_dp
+BUILT_MODULE_LOCATION[0]=dp-driver/drivers/char/csm-dp
 DEST_MODULE_LOCATION[0]=/extra
 STRIP[0]=no
 

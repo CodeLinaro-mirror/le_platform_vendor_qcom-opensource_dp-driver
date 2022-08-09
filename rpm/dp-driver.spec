@@ -43,7 +43,7 @@ if [ -f %{_sourcedir}/common.postinst ]; then
 fi
 
 mkdir -p $RPM_BUILD_ROOT%{_includedir}/linux
-install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/include/uapi/linux/fsm_dp_ioctl.h $RPM_BUILD_ROOT%{_includedir}/linux
+install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/include/uapi/linux/csm_dp_ioctl.h $RPM_BUILD_ROOT%{_includedir}/linux
 
 %clean
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
@@ -75,7 +75,7 @@ exit 0
 %defattr(-,root,root)
 %{_srcdir}
 %{_datarootdir}/%{package_name}/
-%{_includedir}/linux/fsm_dp_ioctl.h
+%{_includedir}/linux/csm_dp_ioctl.h
 
 %changelog
 * %(date "+%a %b %d %Y") %packager %{version}-%{release}
