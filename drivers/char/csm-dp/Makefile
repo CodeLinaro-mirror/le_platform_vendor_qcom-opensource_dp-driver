@@ -1,11 +1,11 @@
 #
-# Makefile for the Qualcomm Technologies, Inc. FSM DP driver
+# Makefile for the Qualcomm Technologies, Inc. CSM DP driver
 #
-CONFIG_FSM_DP ?= m
-obj-$(CONFIG_FSM_DP) += fsm_dp.o
+CONFIG_CSM_DP ?= m
+obj-$(CONFIG_CSM_DP) += csm_dp.o
 
-fsm_dp-objs := fsm_dp_core.o fsm_dp_cdev.o fsm_dp_mhi.o fsm_dp_mem.o
-fsm_dp-objs += fsm_dp_debugfs.o
+csm_dp-objs := csm_dp_core.o csm_dp_cdev.o csm_dp_mhi.o csm_dp_mem.o
+csm_dp-objs += csm_dp_debugfs.o
 
 MHI_BUILD_ROOT ?= $(src)/../../../../../mhi-host
 KBUILD_EXTRA_SYMBOLS ?= $(MHI_BUILD_ROOT)/drivers/bus/mhi/Module.symvers

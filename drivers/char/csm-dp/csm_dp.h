@@ -26,10 +26,10 @@
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
 
-#include <linux/fsm_dp_ioctl.h>
+#include <linux/csm_dp_ioctl.h>
 
-#include "fsm_dp_mhi.h"
-#include "fsm_dp_mem.h"
+#include "csm_dp_mhi.h"
+#include "csm_dp_mem.h"
 
 #define FSM_DP_MODULE_NAME		"fsm-dp"
 #define FSM_DP_DEV_CLASS_NAME	FSM_DP_MODULE_NAME

@@ -14,7 +14,7 @@
 #define __FSM_DP_MEM_H__
 
 #include <linux/types.h>
-#include <linux/fsm_dp_ioctl.h>
+#include <linux/csm_dp_ioctl.h>
 
 struct fsm_dp_drv;
 

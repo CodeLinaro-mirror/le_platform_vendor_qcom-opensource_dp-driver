@@ -18,7 +18,7 @@
 #include <linux/poll.h>
 #include <linux/dma-mapping.h>
 
-#include "fsm_dp.h"
+#include "csm_dp.h"
 
 static inline bool is_rxqueue_mmap_cookie(unsigned int cookie)
 {

@@ -15,7 +15,7 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_device.h>
-#include "fsm_dp.h"
+#include "csm_dp.h"
 
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
 static struct fsm_dp_drv *fsm_dp_pdrv;

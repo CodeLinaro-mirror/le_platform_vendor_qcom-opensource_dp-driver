@@ -15,8 +15,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/mod_devicetable.h>
 
-#include "fsm_dp.h"
-#include "fsm_dp_mhi.h"
+#include "csm_dp.h"
+#include "csm_dp_mhi.h"
 
 static struct fsm_dp_drv *__pdrv;
 

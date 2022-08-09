@@ -12,8 +12,8 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 
-#include "fsm_dp.h"
-#include "fsm_dp_mem.h"
+#include "csm_dp.h"
+#include "csm_dp_mem.h"
 
 #define FSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
 
