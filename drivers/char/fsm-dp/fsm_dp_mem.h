@@ -294,7 +294,7 @@ static inline long fsm_dp_mem_rec_offset(struct fsm_dp_mem *mem,
 	}
 	cluster = rec / mem->loc.buf_per_cluster;
 	offset = (rec % mem->loc.buf_per_cluster) * fsm_dp_buf_true_size(mem);
-	return cluster * FSM_DP_MEMPOOL_CLUSTER_SIZE + offset;
+	return (long)cluster * FSM_DP_MEMPOOL_CLUSTER_SIZE + offset;
 }
 
 static inline void *fsm_dp_mem_offset_addr(struct fsm_dp_mem *mem,
@@ -317,7 +317,7 @@ static inline unsigned long fsm_dp_get_mem_offset(void *addr,
 	unsigned long offset;
 
 	offset = (char *) addr - loc->cluster_kernel_addr[cl];
-	offset += cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+	offset += (long)cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	return offset;
 }
 

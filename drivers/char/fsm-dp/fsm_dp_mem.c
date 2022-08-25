@@ -503,7 +503,7 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 		return;
 
 	for (j = 0; j < mem->loc.num_cluster; j++) {
-		element_data = j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
+		element_data = (long)j * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 		cl_start = mem->loc.cluster_kernel_addr[j];
 		if (j == mem->loc.num_cluster - 1)
 			cl_buf_cnt = mem->buf_cnt -
@@ -829,7 +829,7 @@ int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 		return -EINVAL;
 	}
 	cluster = buf_index / mem->loc.buf_per_cluster;
-	offset = (cluster * FSM_DP_MEMPOOL_CLUSTER_SIZE) +
+	offset = ((long)cluster * FSM_DP_MEMPOOL_CLUSTER_SIZE) +
 			(buf_index % mem->loc.buf_per_cluster) *
 					fsm_dp_buf_true_size(mem);
 #ifdef FSM_DP_BUFFER_FENCING
