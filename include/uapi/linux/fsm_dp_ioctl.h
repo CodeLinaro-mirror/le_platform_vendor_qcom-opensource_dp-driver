@@ -58,6 +58,8 @@
 /* message header version */
 #define FSM_DP_MSG_HDR_VERSION		0x1
 
+#define FSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
+
 enum fsm_dp_mem_type {
 	FSM_DP_MEM_TYPE_DL_CONTROL,
 	FSM_DP_MEM_TYPE_DL_DATA,
@@ -286,6 +288,7 @@ struct fsm_dp_ioctl_getcfg {
 struct fsm_dp_ioctl_tx {
 	enum fsm_dp_channel ch;
 	struct iovec iov;
+	__u32 flags;	/* FSM_DP_IOCTL_TX_FLAG_xxx */
 };
 
 static inline int fsm_dp_mem_type_is_valid(enum fsm_dp_mem_type type)

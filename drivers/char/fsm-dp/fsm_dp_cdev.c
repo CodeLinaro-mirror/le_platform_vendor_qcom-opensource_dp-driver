@@ -91,6 +91,7 @@ static int __cdev_tx(
 	enum fsm_dp_channel ch,
 	struct iovec __user *uiov,
 	unsigned int iov_nr,
+	unsigned int ioctl_flags,
 	bool sg)
 {
 	struct fsm_dp_dev *pdev = cdev->pdev;
@@ -206,6 +207,9 @@ static int __cdev_tx(
 	if (cdev->tx_mode == TX_MODE_LOOPBACK)
 		flag |= FSM_DP_TX_FLAG_LOOPBACK;
 
+	if (ioctl_flags & FSM_DP_IOCTL_TX_FLAG_MIRROR)
+		flag |= FSM_DP_TX_FLAG_MIRROR;
+
 	ret = fsm_dp_tx(pdev, ch, iov, iov_nr, flag, dma_addr);
 
 	if (ret) {
@@ -314,7 +318,7 @@ static int __cdev_ioctl_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!arg.iov.iov_len || arg.iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, false);
+	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, arg.flags, false);
 	return ret;
 }
 
@@ -329,7 +333,7 @@ static int __cdev_ioctl_sg_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!arg.iov.iov_len || arg.iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, true);
+	ret = __cdev_tx(cdev, arg.ch, arg.iov.iov_base, arg.iov.iov_len, arg.flags, true);
 	return ret;
 }
 

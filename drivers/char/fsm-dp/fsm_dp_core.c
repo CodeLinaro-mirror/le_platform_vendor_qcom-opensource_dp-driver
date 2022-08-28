@@ -606,6 +606,9 @@ int fsm_dp_tx(
 			if (ch == FSM_DP_CH_DATA)
 				mhi->dl_flag_array[j] |= MHI_BEI;
 
+			if (flag & FSM_DP_TX_FLAG_MIRROR)
+				mhi->dl_flag_array[j] |= MHI_MIRROR;
+
 			if (dma_addr_array[n]) {
 				mhi->dl_buf_array[j].dma_addr =
 					dma_addr_array[n];
