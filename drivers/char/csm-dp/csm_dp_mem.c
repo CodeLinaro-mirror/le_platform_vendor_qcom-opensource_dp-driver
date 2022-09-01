@@ -754,46 +754,6 @@ void csm_dp_mempool_free(struct csm_dp_mempool *mempool)
 	return;
 }
 
-void csm_dp_mempool_dev_destroy(struct csm_dp_dev *pdev)
-{
-	struct csm_dp_mempool *mempool;
-	int i;
-	int j;
-	unsigned int size;
-	struct csm_dp_mem *mem;
-
-
-	for (j = 0; j < CSM_DP_MEM_TYPE_LAST; j++) {
-		mempool = pdev->mempool[j];
-		if (!mempool)
-			continue;
-		if (!spin_trylock(&mempool->lock))
-			continue;
-		mem = &mempool->mem;
-		if (mem->loc.dma_mapped) {
-			size = mem->loc.size;
-			for (i = 0; i < mem->loc.num_cluster; i++) {
-				if (i ==  mem->loc.num_cluster - 1) {
-					dma_unmap_single(
-						get_mhi_cntrl_dev(pdev),
-						mem->loc.cluster_dma_addr[i],
-						size,
-						mem->loc.direction);
-				} else {
-					dma_unmap_single(
-						get_mhi_cntrl_dev(pdev),
-						mem->loc.cluster_dma_addr[i],
-						CSM_DP_MEMPOOL_CLUSTER_SIZE,
-						mem->loc.direction);
-					size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
-				}
-			}
-			mem->loc.dma_mapped = false;
-		}
-		spin_unlock(&mempool->lock);
-	}
-}
-
 int csm_dp_mempool_get_cfg(
 	struct csm_dp_mempool *mempool,
 	struct csm_dp_mempool_cfg *cfg)

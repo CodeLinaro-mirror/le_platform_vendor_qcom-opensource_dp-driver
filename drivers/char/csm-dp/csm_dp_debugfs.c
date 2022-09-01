@@ -33,10 +33,6 @@ static const struct file_operations name ##_ops = {		\
 	.release = single_release,				\
 }
 
-#ifdef CONFIG_CSM_DP_TEST
-static int debugfs_create_testring_dir(struct dentry *, struct csm_dp_dev *);
-#endif
-
 static struct dentry *__dent;
 
 static int __csm_dp_rxqueue_vma_dump(
@@ -154,28 +150,6 @@ static int __csm_dp_ring_config_dump(
 	seq_printf(s, "RingBuf:                %llx\n", (u64) ring->element);
 	return 0;
 }
-
-static int debugfs_loopback_read(struct seq_file *s, void *unused)
-{
-	struct csm_dp_loopback_task *task =
-		(struct csm_dp_loopback_task *)s->private;
-
-	seq_puts(s, "TX Loopback\n");
-	seq_printf(s, "    Count:              %lu\n", task->stats.tx_cnt);
-	seq_printf(s, "    Enqueue:            %lu\n", task->stats.tx_enque);
-	seq_printf(s, "    Error:              %lu\n", task->stats.tx_err);
-	seq_printf(s, "    Drop:               %lu\n", task->stats.tx_drop);
-	seq_puts(s, "RX Loopback\n");
-	seq_printf(s, "    Count:              %lu\n", task->stats.rx_cnt);
-	seq_printf(s, "    Enqueue:            %lu\n", task->stats.rx_enque);
-	seq_printf(s, "    Error:              %lu\n", task->stats.rx_err);
-	seq_printf(s, "    Drop:               %lu\n", task->stats.rx_drop);
-	seq_printf(s, "Run:                    %lu\n", task->stats.run);
-	seq_printf(s, "Schedule:               %lu\n", task->stats.sched);
-
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_loopback, debugfs_loopback_read, NULL);
 
 static int debugfs_rxq_refcnt_read(struct seq_file *s, void *unused)
 {
@@ -648,8 +622,6 @@ static int debugfs_cdev_show(struct seq_file *s, void *unused)
 							(u64) cdev);
 		seq_printf(s, "PID:                    %d\n",
 							cdev->pid);
-		seq_printf(s, "TX_Mode:                %d\n",
-							cdev->tx_mode);
 
 		for (i = 0; i < CSM_DP_MEM_TYPE_LAST; i++) {
 			seq_printf(s, "MemPoolVMA[%d]\n", i);
@@ -689,23 +661,6 @@ static int debugfs_drv_show(struct seq_file *s, void *unused)
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv, debugfs_drv_show, NULL);
-
-static int debugfs_create_loopback_dir(struct dentry *parent,
-				       struct csm_dp_dev *pdev)
-{
-	struct dentry *entry = NULL, *dentry = NULL;
-
-	dentry = debugfs_create_dir("loopback", parent);
-	if (IS_ERR(dentry))
-		return -ENOMEM;
-
-	entry = debugfs_create_file("status", 0444, dentry,
-				    &pdev->loopback,
-				    &debugfs_loopback_ops);
-	if (!entry)
-		return -ENOMEM;
-	return 0;
-}
 
 static int debugfs_create_rxq_dir(struct dentry *parent, struct csm_dp_dev *pdev)
 {
@@ -930,14 +885,6 @@ int csm_dp_debugfs_init(struct csm_dp_drv *drv)
 
 		if (debugfs_create_rxq_dir(dp_dev_entry, pdev))
 			goto err;
-
-		if (debugfs_create_loopback_dir(dp_dev_entry, pdev))
-			goto err;
-
-#ifdef CONFIG_CSM_DP_TEST
-		if (debugfs_create_testring_dir(dp_dev_entry, pdev))
-			goto err;
-#endif
 	}
 
 	return 0;
@@ -952,110 +899,6 @@ void csm_dp_debugfs_cleanup(struct csm_dp_drv *drv)
 	debugfs_remove_recursive(__dent);
 	__dent = NULL;
 }
-
-#ifdef CONFIG_CSM_DP_TEST
-static int debugfs_testring_enable_read(struct seq_file *s, void *unused)
-{
-	struct csm_dp_test_ring *testrng =
-		(struct csm_dp_test_ring *)s->private;
-
-	seq_printf(s, "%s\n", (testrng->enable) ? "enabled" : "disabled");
-
-	return 0;
-}
-
-static ssize_t debugfs_testring_enable_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	struct csm_dp_test_ring *testrng = (struct csm_dp_test_ring *)
-			(((struct seq_file *)fp->private_data)->private);
-	unsigned int value = 0;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-
-	testrng->enable = (value) ? true : false;
-	return count;
-}
-DEFINE_DEBUGFS_OPS(debugfs_testring_enable, debugfs_testring_enable_read,
-		   debugfs_testring_enable_write);
-
-static int debugfs_testring_opstats_read(struct seq_file *s, void *unused)
-{
-	struct csm_dp_test_ring *testrng =
-		(struct csm_dp_test_ring *)s->private;
-
-	__csm_dp_ring_opstats_dump(s, &testrng->ring.opstats);
-
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_testring_opstats,
-		   debugfs_testring_opstats_read, NULL);
-
-static int debugfs_testring_config_read(struct seq_file *s, void *unused)
-{
-	struct csm_dp_test_ring *testrng =
-		(struct csm_dp_test_ring *)s->private;
-
-	__csm_dp_ring_config_dump(s, &testrng->ring);
-
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_testring_config,
-		   debugfs_testring_config_read, NULL);
-
-static int debugfs_testring_runtime_read(struct seq_file *s, void *unused)
-{
-	struct csm_dp_test_ring *testrng =
-		(struct csm_dp_test_ring *)s->private;
-
-	__csm_dp_ring_runtime_dump(s, &testrng->ring);
-
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_testring_runtime,
-		   debugfs_testring_runtime_read, NULL);
-
-static int debugfs_create_testring_dir(
-	struct dentry *parent,
-	struct csm_dp_dev *pdev)
-{
-	struct dentry *entry = NULL, *dentry = NULL;
-
-	dentry = debugfs_create_dir("test-ring", parent);
-	if (IS_ERR(dentry))
-		return -ENOMEM;
-
-	entry = debugfs_create_file("config", 0444, dentry,
-				    &pdev->test_ring,
-				    &debugfs_testring_config_ops);
-	if (!entry)
-		return -ENOMEM;
-
-	entry = debugfs_create_file("runtime", 0444, dentry,
-				    &pdev->test_ring,
-				    &debugfs_testring_runtime_ops);
-	if (!entry)
-		return -ENOMEM;
-
-	entry = debugfs_create_file("opstats", 0444, dentry,
-				    &pdev->test_ring,
-				    &debugfs_testring_opstats_ops);
-	if (!entry)
-		return -ENOMEM;
-
-	entry = debugfs_create_file("enable", 0644, dentry,
-				    &pdev->test_ring,
-				    &debugfs_testring_enable_ops);
-	if (!entry)
-		return -ENOMEM;
-	return 0;
-}
-
-#endif /* CONFIG_CSM_DP_TEST */
 
 #else
 

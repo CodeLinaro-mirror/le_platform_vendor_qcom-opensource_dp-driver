@@ -44,7 +44,6 @@ struct csm_dp_mhi {
 	struct completion poll_comp;
 	struct hrtimer poll_timer;
 	struct task_struct *tx_poll_thread;
-	bool mhi_destroyed;	/* TODO: remove? */
 	/*
 	 * the following are for needed storage
 	 * for mhi_queue_n_transfer.
@@ -66,9 +65,6 @@ static inline int csm_dp_mhi_n_tx(struct csm_dp_mhi *mhi,
 				unsigned int num)
 {
 	int ret;
-
-	if (mhi->mhi_destroyed)
-		return -ENODEV;
 
 	ret = mhi_queue_n_dma(mhi->mhi_dev, DMA_TO_DEVICE, mhi->dl_buf_array,
 			      mhi->dl_flag_array, num);

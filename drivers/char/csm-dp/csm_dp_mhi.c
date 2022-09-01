@@ -230,7 +230,7 @@ static void __mhi_ul_xfer_cb(
 		switch (mempool->type) {
 		case CSM_DP_MEM_TYPE_UL_CONTROL:
 		case CSM_DP_MEM_TYPE_UL_DATA:
-			csm_dp_mempool_put_buf(mempool, addr); /* rx loop back */
+			CSM_DP_ERROR("unexpected mempool %d\n", mempool->type);
 			break;
 		default:
 #ifdef CSM_DP_BUFFER_FENCING
@@ -327,11 +327,9 @@ static void __mhi_dl_xfer_cb(
 
 static void __mhi_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 {
-
 	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
 
 	switch (mhi_cb) {
-	/* TODO: find a replacement for MHI_CB_DEVICE_DESTROYED */
 	case MHI_CB_PENDING_DATA:
 		if (napi_schedule_prep(&pdev->napi)) {
 			__napi_schedule(&pdev->napi);
@@ -444,7 +442,6 @@ static int csm_dp_mhi_probe(
 	}
 
 	mhi->mhi_dev = mhi_dev;
-	mhi->mhi_destroyed = false;
 	spin_lock_init(&mhi->rx_lock);
 	spin_lock_init(&mhi->tx_lock);
 

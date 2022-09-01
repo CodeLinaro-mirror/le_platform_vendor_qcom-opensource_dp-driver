@@ -183,8 +183,7 @@ static int __cdev_tx(
 		}
 
 		atomic_inc(&mempool->out_xmit);
-		if (mempool->mem.loc.dma_mapped &&
-				cdev->tx_mode != TX_MODE_LOOPBACK) {
+		if (mempool->mem.loc.dma_mapped) {
 			/*
 			 * set to indicate iov_base is
 			 * dma handle instead of
@@ -204,8 +203,6 @@ static int __cdev_tx(
 
 	if (sg)
 		flag |= CSM_DP_TX_FLAG_SG;
-	if (cdev->tx_mode == TX_MODE_LOOPBACK)
-		flag |= CSM_DP_TX_FLAG_LOOPBACK;
 
 	if (ioctl_flags & CSM_DP_IOCTL_TX_FLAG_MIRROR)
 		flag |= CSM_DP_TX_FLAG_MIRROR;
@@ -357,19 +354,6 @@ static int __cdev_ioctl_rx_getcfg(struct csm_dp_cdev *cdev, unsigned long ioarg)
 	return 0;
 }
 
-static int __cdev_ioctl_txmode_cfg(
-	struct csm_dp_cdev *cdev,
-	unsigned long ioarg)
-{
-	int ret;
-	unsigned int mode;
-
-	ret = get_user(mode, (unsigned int __user *)ioarg);
-	if (!ret)
-		cdev->tx_mode = mode;
-	return ret;
-}
-
 static int __cdev_ioctl_rx_poll(struct csm_dp_cdev *cdev, unsigned long ioarg)
 {
 	struct iovec iov;
@@ -382,36 +366,6 @@ static int __cdev_ioctl_rx_poll(struct csm_dp_cdev *cdev, unsigned long ioarg)
 
 	return __cdev_rx_poll(cdev, iov.iov_base, iov.iov_len);
 }
-
-#ifdef CONFIG_CSM_DP_TEST
-static int __cdev_ioctl_testring_write(
-	struct csm_dp_cdev *cdev,
-	unsigned long ioarg)
-{
-	struct csm_dp_dev *pdev = cdev->pdev;
-	struct csm_dp_test_ring *test_ring = &pdev->test_ring;
-	int ret = -EIO;
-
-	if (drv->test_ring.enable)
-		ret = csm_dp_ring_write(&test_ring->ring,
-				     TEST_RING_WRITE_MAGIC_VALUE, 0);
-	return ret;
-}
-
-static int __cdev_ioctl_testring_getcfg(
-	struct csm_dp_cdev *cdev,
-	unsigned long ioarg)
-{
-	struct csm_dp_dev *pdev = cdev->pdev;
-	struct csm_dp_test_ring *test_ring = &pdev->test_ring;
-	struct csm_dp_ring_cfg cfg;
-	int ret;
-
-	csm_dp_ring_get_cfg(&test_ring->ring, &cfg);
-	ret = copy_to_user((void __user *)ioarg, &cfg, sizeof(cfg));
-	return ret;
-}
-#endif
 
 static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 {
@@ -474,20 +428,9 @@ static long csm_dp_cdev_ioctl(
 	case CSM_DP_IOCTL_SG_TX:
 		ret = __cdev_ioctl_sg_tx(cdev, ioarg);
 		break;
-	case CSM_DP_IOCTL_TX_MODE_CONFIG:
-		ret = __cdev_ioctl_txmode_cfg(cdev, ioarg);
-		break;
 	case CSM_DP_IOCTL_RX_POLL:
 		ret = __cdev_ioctl_rx_poll(cdev, ioarg);
 		break;
-#ifdef CONFIG_CSM_DP_TEST
-	case CSM_DP_IOCTL_TEST_RING_WRITE:
-		ret = __cdev_ioctl_testring_write(cdev, ioarg);
-		break;
-	case CSM_DP_IOCTL_TEST_RING_GET_CONFIG:
-		ret = __cdev_ioctl_testring_getcfg(cdev, ioarg);
-		break;
-#endif
 	default:
 		break;
 	}
@@ -805,30 +748,6 @@ static int __cdev_rxqueue_mmap(
 	return 0;
 }
 
-#ifdef CONFIG_CSM_DP_TEST
-static int __csm_dp_cdev_testring_mmap(
-	struct csm_dp_cdev *cdev,
-	struct vm_area_struct *vma)
-{
-	struct csm_dp_dev *pdev = cdev->pdev;
-	struct csm_dp_ring *ring;
-	int ret = 0;
-
-	ring = &pdev->test_ring.ring;
-
-	ret = remap_pfn_range(vma,
-			      vma->vm_start,
-			      page_to_pfn(ring->loc.page[0])
-			      (ring->loc.size),
-			      vma->vm_page_prot);
-	if (ret) {
-		CSM_DP_DEBUG("%s: mmap failed\n", __func__);
-		return ret;
-	}
-	return 0;
-}
-#endif
-
 static int csm_dp_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct csm_dp_cdev *cdev = (struct csm_dp_cdev *)file->private_data;
@@ -840,11 +759,6 @@ static int csm_dp_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 		  (unsigned long)vma->vm_page_prot.pgprot, vma->vm_flags);
 
 	cookie = vma->vm_pgoff << PAGE_SHIFT;
-
-#ifdef CONFIG_CSM_DP_TEST
-	if (cookie == TEST_RING_MMAP_COOKIE)
-		return __csm_dp_cdev_testring_mmap(cdev, vma);
-#endif
 
 	if (is_rxqueue_mmap_cookie(cookie))
 		ret = __cdev_rxqueue_mmap(cdev, vma);

@@ -22,8 +22,6 @@
 #define CSM_DP_MAX_IOV_SIZE	64
 #define CSM_DP_MAX_SG_IOV_SIZE	8
 
-
-
 #define CSM_DP_IOCTL_BASE			'f'
 
 #define CSM_DP_IOCTL_MEMPOOL_ALLOC	\
@@ -41,22 +39,12 @@
 #define CSM_DP_IOCTL_SG_TX		\
 		_IOWR(CSM_DP_IOCTL_BASE, 5, struct csm_dp_ioctl_tx)
 
+/* obsolete */
 #define CSM_DP_IOCTL_TX_MODE_CONFIG	\
 		_IOWR(CSM_DP_IOCTL_BASE, 6, unsigned int)
 
 #define CSM_DP_IOCTL_RX_POLL	\
 		_IOWR(CSM_DP_IOCTL_BASE, 7, struct iovec)
-
-/* ioctl command for testing */
-#define CSM_DP_IOCTL_TEST_RING_WRITE	_IO(CSM_DP_IOCTL_BASE, 0x11)
-#define CSM_DP_IOCTL_TEST_RING_GET_CONFIG	\
-		_IOWR(CSM_DP_IOCTL_BASE, 0x12, struct csm_dp_ioctl_getcfg)
-
-/* special value to write for testing */
-#define TEST_RING_WRITE_MAGIC_VALUE	0xFFFFFFFE
-
-/* message header version */
-#define CSM_DP_MSG_HDR_VERSION		0x1
 
 #define CSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
 
@@ -75,71 +63,21 @@ enum csm_dp_mmap_type {
 };
 
 enum csm_dp_rx_type {
-	CSM_DP_RX_TYPE_L1,
-	CSM_DP_RX_TYPE_RF,
-	CSM_DP_RX_TYPE_TA,
-	CSM_DP_RX_TYPE_LPBK,
-	CSM_DP_RX_TYPE_ORU,
+	CSM_DP_RX_TYPE_FAPI,
 	CSM_DP_RX_TYPE_LAST,
 };
-
-enum csm_dp_msg_type {
-	CSM_DP_MSG_TYPE_L1		= 0,
-	CSM_DP_MSG_TYPE_RF		= 1,
-	CSM_DP_MSG_TYPE_TA		= 2,
-	CSM_DP_MSG_TYPE_ORU		= 3,
-	CSM_DP_MSG_TYPE_LPBK_REQ	= 0xFE,
-	CSM_DP_MSG_TYPE_LPBK_RSP	= 0xFF,
-};
-
-/* Note! when we add a new message type, change this macro */
-#define CSM_DP_NUM_MSG_TYPE (CSM_DP_MSG_TYPE_ORU + 3)
-
-
-struct csm_dp_msghdr {
-	uint32_t version : 8;
-	uint32_t type : 8;
-	uint32_t reserved : 15;
-	uint32_t aggr: 1 ; /* if set, csm_dp_aggrhdr follows */
-	uint32_t length : 16;
-	uint32_t sequence : 16;
-} __attribute__((packed));
-
 
 #define CSM_DP_BUFFER_FENCE_SIG 0xDEADFACE
 #define CSM_DP_BUFFER_SIG       0xDAC0FFEE
 #define CSM_DP_BUFFER_FENCING   1
 
 /*
- * The corresponding aggr msg is starting at offset from aggr header of
- * size bytes.
- */
-struct csm_dp_aggriob {
-	uint16_t offset;
-	uint16_t size;
-};
-
-/* csm_dp_aggrhdr */
-struct csm_dp_aggrhdr {
-	uint32_t reserved : 24;
-	uint32_t n_iobs: 8; /* number of csm_dp_aggriov */
-	struct csm_dp_aggriob iob[0]; /* nIovs csm_dp_aggriov follows */
-} __attribute__((packed));
-
-/*
- * A buffer control is an area with size of
- * L1_CACHE_BYTES (64 bytes for arm64).
- * It is placed at the beginging
- * of a buffer.
- * csm_dp_buf_cntrl is placed at the
- * control area. The last
- * 4 bytes of the area is a fence defined as
- * CSM_DP_BUFFER_FENCE_SIG
- * The size of csm_dp_buf_cntrl
- * should be less  L1_CACHE_BYTES.
- * User data is placed after the
- * control area of L1_CACHE_BYTES size.
- * User data starts with csm_dp_msghdr
+ * A buffer control is an area with size of L1_CACHE_BYTES (64 bytes for arm64).
+ * It is placed at the beginning of a buffer.
+ * csm_dp_buf_cntrl is placed at the control area. The last 4 bytes of the area is a fence defined
+ * as CSM_DP_BUFFER_FENCE_SIG.
+ * The size of csm_dp_buf_cntrl should be less than L1_CACHE_BYTES.
+ * User data is placed after the control area of L1_CACHE_BYTES size.
  */
 #define CSM_DP_L1_CACHE_BYTES 64  /*
 				   * CSM_DP_L1_CACHE_BYTES is the same as
@@ -159,7 +97,7 @@ struct csm_dp_aggrhdr {
 
 /*
  * maximum mtu size for CSM DP application, including csm_dp header
- * Note, need to make sure both sides in sync between NPU, and Q6
+ * Note, need to make sure both sides in sync between Host and Q6
  */
 #define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
 #define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
@@ -219,7 +157,7 @@ struct csm_dp_ring_element {
 				 * If the ring is used for
 				 * csm dp buffer management,
 				 * ring data is pointing to
-				 * a buffer csm_dp_msghdr area
+				 * user data
 				 */
 };
 
@@ -329,15 +267,10 @@ static inline int csm_dp_rx_type_is_valid(enum csm_dp_rx_type type)
 static inline const char *csm_dp_rx_type_to_str(enum csm_dp_rx_type type)
 {
 	switch (type) {
-	case CSM_DP_RX_TYPE_L1: return "L1";
-	case CSM_DP_RX_TYPE_RF: return "RF";
-	case CSM_DP_RX_TYPE_TA: return "TA";
-	case CSM_DP_RX_TYPE_ORU: return "ORU";
-	case CSM_DP_RX_TYPE_LPBK: return "LOOPBACK";
+	case CSM_DP_RX_TYPE_FAPI: return "FAPI";
 	default: return "unknown";
 	}
 }
-
 
 static inline const char *csm_dp_buf_state_to_str(enum csm_dp_buf_state state)
 {

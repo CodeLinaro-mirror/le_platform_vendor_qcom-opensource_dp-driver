@@ -64,14 +64,9 @@ struct vm_area_struct;
 #define MMAP_RX_COOKIE_TO_TYPE(cookie) \
 	(MMAP_COOKIE_TO_MEM_TYPE(cookie) - CSM_DP_MEM_TYPE_LAST)
 
-#define TEST_RING_MMAP_COOKIE	0x80000000
-
-#define TX_MODE_LOOPBACK 1
-
 #define DEFAULT_RX_QUEUE_SIZE		1024
 
 #define CSM_DP_TX_FLAG_SG	0x01
-#define CSM_DP_TX_FLAG_LOOPBACK	0x02
 #define CSM_DP_TX_FLAG_MIRROR	0x04
 
 #define CSM_DP_ASSERT(cond, msg) do { \
@@ -110,9 +105,6 @@ struct csm_dp_rxqueue {
 	bool inited;
 };
 
-/* csm_dp_cdev tx_mode field bitmap */
-#define TX_MODE_LOOPBACK 1
-
 /* Per-process character device structure */
 struct csm_dp_cdev {
 	struct list_head list;
@@ -124,44 +116,6 @@ struct csm_dp_cdev {
 
 	/* vma mapping for receiving queue */
 	struct csm_dp_rxqueue_vma rxqueue_vma[CSM_DP_RX_TYPE_LAST];
-	unsigned int tx_mode;
-};
-
-struct csm_dp_loopback_stats {
-	unsigned long tx_cnt;
-	unsigned long tx_enque;
-	unsigned long tx_drop;
-	unsigned long tx_err;
-	unsigned long rx_cnt;
-	unsigned long rx_enque;
-	unsigned long rx_drop;
-	unsigned long rx_err;
-	unsigned long run;
-	unsigned long sched;
-};
-
-struct csm_dp_loopback_job {
-	struct list_head list;
-	void *data;
-	unsigned int length;
-	unsigned int dest;
-	bool rx_loopback;
-};
-
-struct csm_dp_loopback_task {
-	struct list_head free_q;
-	struct list_head job_q;
-	spinlock_t lock;
-	struct work_struct work;
-	struct workqueue_struct *workq;
-	void *alloc_ptr;
-	bool inited;
-	struct csm_dp_loopback_stats stats;
-};
-
-struct csm_dp_test_ring {
-	struct csm_dp_ring ring;
-	bool enable;
 };
 
 struct csm_dp_core_stats {
@@ -186,20 +140,14 @@ struct csm_dp_dev {
 	struct mutex cdev_lock;
 	struct list_head cdev_head;
 	struct mutex mempool_lock;
-	atomic_t tx_seqnum;
 	struct csm_dp_mempool *mempool[CSM_DP_MEM_TYPE_LAST];
 	struct csm_dp_rxqueue rxq[CSM_DP_RX_TYPE_LAST];
-	struct csm_dp_loopback_task loopback;
 	struct csm_dp_core_stats stats;
 	struct work_struct alloc_work;
 	unsigned int csm_dp_outbuf_drop_sync;
 	csm_dp_ring_index_t csm_dp_prev_ul_prod_tail;
 
 	struct csm_dp_buf_cntrl	*pending_packets;
-
-#ifdef CONFIG_CSM_DP_TEST
-	struct csm_dp_test_ring test_ring;
-#endif
 };
 
 struct csm_dp_drv {
@@ -229,7 +177,5 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
 void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 
 void csm_dp_hex_dump(unsigned char *buf, unsigned int len);
-
-void csm_dp_mempool_dev_destroy(struct csm_dp_dev *pdev);
 
 #endif /* __CSM_DP__ */
