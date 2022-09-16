@@ -869,3 +869,4 @@ module_exit(fsm_dp_module_exit);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("FSM DP driver");
+MODULE_VERSION(DP_MODULE_VERSION);
