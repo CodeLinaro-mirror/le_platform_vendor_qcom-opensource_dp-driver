@@ -114,10 +114,9 @@ static int __mhi_rx_replenish(
 
 			mhi->ul_buf_array[i].buf = buf;
 			mhi->ul_buf_array[i].len = mempool->mem.buf_sz;
-			if (is_control)
-				mhi->ul_flag_array[i] = MHI_EOT;
-			else
-				mhi->ul_flag_array[i] = MHI_EOT | MHI_BEI;
+			mhi->ul_flag_array[i] = MHI_EOT | MHI_SG;
+			if (!is_control)
+				mhi->ul_flag_array[i] |= MHI_BEI;
 			if (mempool->mem.loc.dma_mapped &&
 					buf != mempool->dummy_buf) {
 

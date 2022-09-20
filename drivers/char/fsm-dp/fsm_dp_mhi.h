@@ -72,10 +72,12 @@ static inline int fsm_dp_mhi_n_tx(struct fsm_dp_mhi *mhi,
 
 	ret = mhi_queue_n_dma(mhi->mhi_dev, DMA_TO_DEVICE, mhi->dl_buf_array,
 			      mhi->dl_flag_array, num);
-	if (!ret)
+	if (!ret) {
 		mhi->stats.tx_cnt += num;
-	else
+	} else {
+		pr_err_ratelimited("mhi_queue_n_dma failed, num %d ret %d\n", num, ret);
 		mhi->stats.tx_err += num;
+	}
 	return ret;
 }
 
