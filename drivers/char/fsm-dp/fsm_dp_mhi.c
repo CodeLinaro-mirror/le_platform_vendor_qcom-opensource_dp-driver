@@ -284,6 +284,11 @@ static void __mhi_dl_xfer_cb(
 		return;
 	}
 
+	while (!mhi->rx_tail_buf_cntrl) {
+		FSM_DP_DEBUG("%s: waiting for probe to complete\n", __func__);
+		udelay(100);
+	}
+
 	packet_start = mhi->rx_head_buf_cntrl;
 	packet_end = result->buf_addr - sizeof(struct fsm_dp_buf_cntrl);
 	for (; mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl;
