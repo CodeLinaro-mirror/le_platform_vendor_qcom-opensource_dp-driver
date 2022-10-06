@@ -703,7 +703,7 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 	rx_work = mhi_poll(pdev->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);
 	if (rx_work < 0) {
 		rx_work = 0;
-		pr_err("Error polling ret:%d\n", rx_work);
+		pr_err("Error Rx polling ret:%d\n", rx_work);
 		napi_complete(napi);
 		goto exit_poll;
 	}

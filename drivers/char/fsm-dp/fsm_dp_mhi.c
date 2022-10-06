@@ -364,7 +364,7 @@ static int fsm_dp_mhi_tx_poll_thread(void *data)
 		wait_for_completion(&pdev->mhi_data_dev.poll_comp);
 		ret = mhi_poll(mhi_dev, FSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
 		if (ret < 0)
-			pr_err("Error polling ret:%d\n", ret);
+			pr_err_ratelimited("Error Tx polling ret:%d\n", ret);
 	}
 
 	return 0;
@@ -488,6 +488,8 @@ err:
 static void fsm_dp_mhi_remove(struct mhi_device *mhi_dev)
 {
 	struct fsm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
+
+	FSM_DP_INFO("%s\n", __func__);
 
 	if (mhi_dev->id->driver_data == FSM_DP_CH_DATA) {
 		kthread_stop(pdev->mhi_data_dev.tx_poll_thread);
