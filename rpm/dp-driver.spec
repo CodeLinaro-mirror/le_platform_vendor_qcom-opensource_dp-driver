@@ -14,17 +14,13 @@ License:           %license
 Release:           1dkms
 BuildArch:         x86_64
 Requires(post):    dkms >= 3.0.6
+Requires:          mhi-host = %{version}
 BuildRoot:         %{_tmppath}/%{name}-%{version}-%{release}-root/
 
 %description
 Kernel modules for %{package_name} %{version} in a DKMS wrapper.
 
 %prep
-if [ "%mktarball_line" != "none" ]; then
-        echo -e "\n In the %prep step...\n"
-        /usr/sbin/dkms mktarball -m %package_name -v %version %mktarball_line --archive `basename %{package_name}-%{version}.dkms.tar.gz`
-        cp -af %{_dkmsdir}/%{package_name}/%{version}/tarball/`basename %{package_name}-%{version}.dkms.tar.gz` %{package_name}-%{version}.dkms.tar.gz
-fi
 
 %install
 echo -e "\n About to start INSTALL step.. \n"
