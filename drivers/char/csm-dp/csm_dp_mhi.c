@@ -387,7 +387,7 @@ static int csm_dp_mhi_probe(
 	int ret;
 	struct csm_dp_mhi *mhi;
 	struct csm_dp_mempool *mempool;
-	unsigned int vf_num;
+	unsigned int bus_num, vf_num;
 
 	CSM_DP_DEBUG("%s: probing mhi chan %s driver_data %ld\n",
 		     __func__, id->chan, id->driver_data);
@@ -395,24 +395,27 @@ static int csm_dp_mhi_probe(
 	if (__pdrv == NULL)
 		return -ENODEV;
 
-	// TODO: support multiple DU devices (each one could be SR-IOV enabled)
+	bus_num = mhi_get_device_bus_number(mhi_dev->mhi_cntrl);
 	vf_num = mhi_get_device_instance_id(mhi_dev->mhi_cntrl);
-	CSM_DP_DEBUG("%s: VF %d\n", __func__, vf_num);
+	CSM_DP_DEBUG("%s: bus %d VF %d\n", __func__, bus_num, vf_num);
 	if (vf_num < 0) {
 		/* SR-IOV disabled, create single device node */
-		pdev = &__pdrv->dp_devs[0];
+		pdev = &__pdrv->dp_devs[bus_num * CSM_DP_MAX_NUM_VFS];
 	} else if (vf_num == 0) {
 		/* SR-IOV enabled, PF device: ignore */
 		return 0;
-	} else if (vf_num > CSM_DP_MAX_NUM_DEVS) {
-		/* invalid id */
-		CSM_DP_ERROR("%s: invalid instance id %d\n", __func__, vf_num);
+	} else if (bus_num >= CSM_DP_MAX_NUM_BUSES || vf_num > CSM_DP_MAX_NUM_VFS) {
+		/* invalid ids */
+		CSM_DP_ERROR("%s: invalid ids bus_num %d vf_num %d\n", __func__, bus_num, vf_num);
 		return -EINVAL;
 	} else {
-		/* SR-IOV enabled, VF device. vf_num is 1..4 */
-		pdev = &__pdrv->dp_devs[vf_num - 1];
+		/* SR-IOV enabled, VF device. bus_num is 0..11, vf_num is 1..4 */
+		pdev = &__pdrv->dp_devs[bus_num * CSM_DP_MAX_NUM_VFS + vf_num - 1];
 	}
+
 	if (!pdev->cdev_inited) {
+		pdev->bus_num = bus_num;
+		pdev->vf_num = vf_num;
 		ret = csm_dp_cdev_add(pdev, &mhi_dev->dev);
 		if (ret)
 			return ret;

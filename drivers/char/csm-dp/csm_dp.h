@@ -74,7 +74,9 @@ struct vm_area_struct;
 		panic(msg); \
 } while (0)
 
-#define CSM_DP_MAX_NUM_DEVS 4
+#define CSM_DP_MAX_NUM_BUSES 12 /* max supported Lassen devices connected to this Host */
+#define CSM_DP_MAX_NUM_VFS 4    /* max Virtual Functions that single Lassen device can expose */
+#define CSM_DP_MAX_NUM_DEVS (CSM_DP_MAX_NUM_BUSES * CSM_DP_MAX_NUM_VFS)
 
 /*
  * vma mapping for mempool which includes
@@ -134,6 +136,8 @@ struct csm_dp_dev {
 	struct csm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
 	struct csm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
 	bool cdev_inited;
+	unsigned int bus_num;
+	unsigned int vf_num;
 	struct cdev cdev;
 	struct net_device dummy_dev;
 	struct napi_struct napi;
