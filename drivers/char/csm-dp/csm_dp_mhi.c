@@ -465,7 +465,7 @@ static int csm_dp_mhi_probe(
 		init_completion(&mhi->poll_comp);
 		mhi->tx_poll_thread = kthread_run(csm_dp_mhi_tx_poll_thread, mhi_dev,
 						  "csm_dp_mhi_tx_poll");
-		if (IS_ERR(mhi->tx_poll_thread))
+		if (IS_ERR_OR_NULL(mhi->tx_poll_thread))
 			CSM_DP_WARN("%s: failed to start tx poll thread\n", __func__);
 
 		hrtimer_init(&mhi->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);

@@ -547,7 +547,7 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 	unsigned int cookie;
 
 	mempool = kzalloc(sizeof(*mempool), GFP_KERNEL);
-	if (IS_ERR(mempool)) {
+	if (IS_ERR_OR_NULL(mempool)) {
 		CSM_DP_ERROR("%s: failed to allocate mempool\n", __func__);
 		return NULL;
 	}
@@ -562,7 +562,7 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 	 */
 	if (csm_dp_mem_type_is_ul(type)) {
 		mempool->dummy_buf = kzalloc(buf_sz, GFP_KERNEL);
-		if (IS_ERR(mempool->dummy_buf)) {
+		if (IS_ERR_OR_NULL(mempool->dummy_buf)) {
 			mempool->dummy_buf = NULL;
 			goto cleanup;
 		}

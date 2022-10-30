@@ -775,7 +775,7 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 	struct csm_dp_cdev *cdev;
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
-	if (IS_ERR(cdev)) {
+	if (IS_ERR_OR_NULL(cdev)) {
 		CSM_DP_ERROR("%s: failed to alloc memory\n!", __func__);
 		return -ENOMEM;
 	}
@@ -832,7 +832,7 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 	int ret;
 
 	pdrv->dev_class = class_create(THIS_MODULE, CSM_DP_DEV_CLASS_NAME);
-	if (IS_ERR(pdrv->dev_class)) {
+	if (IS_ERR_OR_NULL(pdrv->dev_class)) {
 		CSM_DP_ERROR("%s: class_create failed\n", __func__);
 		return -ENOMEM;
 	}
@@ -888,7 +888,7 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 
 	dev = device_create(pdrv->dev_class, mhi_dev, new_devno, pdrv, "csm0-dp%d",
 			    index);
-	if (IS_ERR(dev)) {
+	if (IS_ERR_OR_NULL(dev)) {
 		CSM_DP_ERROR("%s: device_create failed\n", __func__);
 		ret = PTR_ERR(dev);
 		cdev_del(&pdev->cdev);

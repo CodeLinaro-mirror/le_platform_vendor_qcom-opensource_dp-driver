@@ -668,13 +668,13 @@ static int debugfs_create_rxq_dir(struct dentry *parent, struct csm_dp_dev *pdev
 	unsigned int type;
 
 	root = debugfs_create_dir("rxque", parent);
-	if (IS_ERR(root))
+	if (IS_ERR_OR_NULL(root))
 		return -ENOMEM;
 
 	for (type = 0; type < CSM_DP_RX_TYPE_LAST; type++) {
 		dentry = debugfs_create_dir(csm_dp_rx_type_to_str(type),
 					    root);
-		if (IS_ERR(dentry))
+		if (IS_ERR_OR_NULL(dentry))
 			return -ENOMEM;
 
 		entry = debugfs_create_file("config", 0444, dentry,
@@ -711,7 +711,7 @@ static int debugfs_create_ring_dir(
 	struct dentry *entry = NULL, *dentry = NULL;
 
 	dentry = debugfs_create_dir("ring", parent);
-	if (IS_ERR(dentry))
+	if (IS_ERR_OR_NULL(dentry))
 		return -ENOMEM;
 
 	entry = debugfs_create_file("config", 0444, dentry,
@@ -754,7 +754,7 @@ static int debugfs_create_mem_dir(
 	struct dentry *entry = NULL, *dentry = NULL;
 
 	dentry = debugfs_create_dir("mem", parent);
-	if (IS_ERR(dentry))
+	if (IS_ERR_OR_NULL(dentry))
 		return -ENOMEM;
 
 	entry = debugfs_create_file("config", 0444, dentry,
@@ -793,7 +793,7 @@ static int debugfs_create_mempool_dir(
 	unsigned int type;
 
 	root = debugfs_create_dir("mempool", parent);
-	if (IS_ERR(root))
+	if (IS_ERR_OR_NULL(root))
 		return -ENOMEM;
 
 	entry = debugfs_create_file("active", 0444, root, pdev,
@@ -803,7 +803,7 @@ static int debugfs_create_mempool_dir(
 
 	for (type = 0; type < CSM_DP_MEM_TYPE_LAST; type++) {
 		dentry = debugfs_create_dir(csm_dp_mem_type_to_str(type), root);
-		if (IS_ERR(dentry))
+		if (IS_ERR_OR_NULL(dentry))
 			return -ENOMEM;
 
 		ret = debugfs_create_ring_dir(dentry, &pdev->mempool[type]);
@@ -847,7 +847,7 @@ int csm_dp_debugfs_init(struct csm_dp_drv *drv)
 	if (unlikely(__dent))
 		return -EBUSY;
 	__dent = debugfs_create_dir(CSM_DP_MODULE_NAME, 0);
-	if (IS_ERR(__dent))
+	if (IS_ERR_OR_NULL(__dent))
 		return -ENOMEM;
 	entry = debugfs_create_file("driver", 0444, __dent, drv,
 				    &debugfs_drv_ops);
@@ -859,7 +859,7 @@ int csm_dp_debugfs_init(struct csm_dp_drv *drv)
 
 		snprintf(buf, sizeof(buf), "dev%d", i);
 		dp_dev_entry = debugfs_create_dir(buf, __dent);
-		if (IS_ERR(dp_dev_entry))
+		if (IS_ERR_OR_NULL(dp_dev_entry))
 			goto err;
 		entry = debugfs_create_file("cdev", 0444, dp_dev_entry, pdev,
 							&debugfs_cdev_ops);

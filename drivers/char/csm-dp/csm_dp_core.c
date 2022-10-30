@@ -436,7 +436,7 @@ static int csm_dp_probe(void)
 	pr_info("CSM-DP: probing CSM\n");
 
 	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);
-	if (IS_ERR(pdrv))
+	if (IS_ERR_OR_NULL(pdrv))
 		return -ENOMEM;
 	csm_dp_pdrv = pdrv;
 
