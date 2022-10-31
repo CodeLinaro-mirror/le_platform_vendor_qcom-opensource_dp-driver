@@ -972,7 +972,7 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 		goto err;
 	}
 
-	dev = device_create(pdrv->dev_class, mhi_dev, new_devno, pdrv, CSM_DP_CDEV_NAME "%d",
+	dev = device_create(pdrv->dev_class, mhi_dev, new_devno, pdrv, "csm0-dp%d",
 			    index);
 	if (IS_ERR(dev)) {
 		CSM_DP_ERROR("%s: device_create failed\n", __func__);
