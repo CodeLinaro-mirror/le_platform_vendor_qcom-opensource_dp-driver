@@ -52,9 +52,16 @@ static int csm_dp_rxqueue_init(
 	if (!ring_size)
 		return -EINVAL;
 
-	ret = csm_dp_ring_init(&rxq->ring, ring_size, MMAP_RX_COOKIE(rx_type));
+	rxq->ring = kzalloc(sizeof(struct csm_dp_ring ), GFP_KERNEL);
+	if (!rxq->ring)
+		return -ENOMEM;
+
+	ret = csm_dp_ring_init(rxq->ring, ring_size, MMAP_RX_COOKIE(rx_type));
 	if (ret) {
 		CSM_DP_DEBUG("%s: failed to initialize rx ring!\n", __func__);
+		kfree(rxq->ring);
+		rxq->ring = NULL;
+
 		return ret;
 	}
 
@@ -70,7 +77,9 @@ static void csm_dp_rxqueue_cleanup(struct csm_dp_rxqueue *rxq)
 {
 	if (rxq->inited) {
 		wake_up(&rxq->wq);
-		csm_dp_ring_cleanup(&rxq->ring);
+		csm_dp_ring_cleanup(rxq->ring);
+		kfree(rxq->ring);
+		rxq->ring = NULL;
 		rxq->inited = false;
 	}
 }
@@ -119,7 +128,7 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 			CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
 	offset = csm_dp_get_mem_offset(addr, &mempool->mem.loc, cl);
-	if (csm_dp_ring_write(&rxq->ring, offset, 0)) {
+	if (csm_dp_ring_write(rxq->ring, offset, 0)) {
 		CSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
 		goto free_rxbuf;
 	}
@@ -185,7 +194,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 	return 0;
 }
 
-static void csm_dp_rx_cleanup(struct csm_dp_dev *pdev)
+void csm_dp_rx_cleanup(struct csm_dp_dev *pdev)
 {
 	unsigned int type;
 
@@ -388,7 +397,7 @@ static void csm_dp_alloc_work(struct work_struct *work)
 
 static int csm_dp_core_init(struct csm_dp_drv *pdrv)
 {
-	int ret, i;
+	int i;
 
 	for (i = 0; i < CSM_DP_MAX_NUM_DEVS; i++) {
 		struct csm_dp_dev *pdev = &pdrv->dp_devs[i];
@@ -400,15 +409,9 @@ static int csm_dp_core_init(struct csm_dp_drv *pdrv)
 							CSM_DP_NAPI_WEIGHT);
 		napi_enable(&pdev->napi);
 		INIT_WORK(&pdev->alloc_work, csm_dp_alloc_work);
-
-		ret = csm_dp_rx_init(pdev);
-		if (ret)
-			goto exit;
 	}
 
-
-exit:
-	return ret;
+	return 0;
 }
 
 static void csm_dp_core_cleanup(struct csm_dp_drv *pdrv)

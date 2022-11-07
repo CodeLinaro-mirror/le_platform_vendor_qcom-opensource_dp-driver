@@ -167,7 +167,7 @@ static int debugfs_rxq_opstats_read(struct seq_file *s, void *unused)
 	struct csm_dp_rxqueue *rxq = (struct csm_dp_rxqueue *)s->private;
 
 	if (rxq->inited)
-		__csm_dp_ring_opstats_dump(s, &rxq->ring.opstats);
+		__csm_dp_ring_opstats_dump(s, &rxq->ring->opstats);
 
 	return 0;
 }
@@ -180,7 +180,7 @@ static int debugfs_rxq_config_read(struct seq_file *s, void *unused)
 	if (rxq->inited) {
 		seq_printf(s, "Type:                   %s\n",
 			   csm_dp_rx_type_to_str(rxq->type));
-		__csm_dp_ring_config_dump(s, &rxq->ring);
+		__csm_dp_ring_config_dump(s, rxq->ring);
 	}
 
 	return 0;
@@ -192,7 +192,7 @@ static int debugfs_rxq_runtime_read(struct seq_file *s, void *unused)
 	struct csm_dp_rxqueue *rxq = (struct csm_dp_rxqueue *)s->private;
 
 	if (rxq->inited)
-		__csm_dp_ring_runtime_dump(s, &rxq->ring);
+		__csm_dp_ring_runtime_dump(s, rxq->ring);
 
 	return 0;
 }

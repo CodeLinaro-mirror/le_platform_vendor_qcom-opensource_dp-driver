@@ -346,7 +346,7 @@ static int __cdev_ioctl_rx_getcfg(struct csm_dp_cdev *cdev, unsigned long ioarg)
 	if (!csm_dp_rx_type_is_valid(req.type) || req.cfg == NULL)
 		return -EINVAL;
 
-	csm_dp_ring_get_cfg(&pdev->rxq[req.type].ring, &cfg);
+	csm_dp_ring_get_cfg(pdev->rxq[req.type].ring, &cfg);
 	if (copy_to_user((void __user *)req.cfg, &cfg, sizeof(cfg))) {
 		CSM_DP_ERROR("%s: copy_to_user failed\n", __func__);
 		return -EFAULT;
@@ -392,7 +392,7 @@ static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 	for (type = 0; type < CSM_DP_RX_TYPE_LAST; type++) {
 		if (cdev->rxqueue_vma[type].vma) {
 			rxq = &pdev->rxq[type];
-			if (!csm_dp_ring_is_empty(&rxq->ring)) {
+			if (!csm_dp_ring_is_empty(rxq->ring)) {
 				mask |= POLLIN | POLLRDNORM;
 				break;
 			}
@@ -722,7 +722,7 @@ static int __cdev_rxqueue_mmap(
 		return -EBUSY;
 	}
 
-	ring = &pdev->rxq[type].ring;
+	ring = pdev->rxq[type].ring;
 	size = vma->vm_end - vma->vm_start;
 	if (size < csm_dp_mem_loc_mmap_size(&ring->loc)) {
 		CSM_DP_ERROR(
@@ -875,6 +875,10 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 		return -EINVAL;
 	}
 
+	ret = csm_dp_rx_init(pdev);
+	if (ret)
+		return ret;
+
 	mutex_init(&pdev->cdev_lock);
 	INIT_LIST_HEAD(&pdev->cdev_head);
 
@@ -900,6 +904,7 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 	return 0;
 
 err:
+	csm_dp_rx_cleanup(pdev);
 	mutex_destroy(&pdev->cdev_lock);
 	return ret;
 }
@@ -913,6 +918,7 @@ void csm_dp_cdev_del(struct csm_dp_dev *pdev)
 
 	device_destroy(pdrv->dev_class, pdev->cdev.dev);
 	cdev_del(&pdev->cdev);
+	csm_dp_rx_cleanup(pdev);
 	mutex_destroy(&pdev->cdev_lock);
 	pdev->cdev_inited = false;
 }

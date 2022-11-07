@@ -99,7 +99,7 @@ struct csm_dp_rxqueue_vma {
 /* RX queue using ring buffer */
 struct csm_dp_rxqueue {
 	enum csm_dp_rx_type type;
-	struct csm_dp_ring ring;
+	struct csm_dp_ring *ring;
 	wait_queue_head_t wq;
 	atomic_t refcnt;
 	bool inited;
@@ -165,7 +165,8 @@ void csm_dp_cdev_del(struct csm_dp_dev *pdev);
 int csm_dp_debugfs_init(struct csm_dp_drv *pdrv);
 void csm_dp_debugfs_cleanup(struct csm_dp_drv *pdrv);
 
-
+int csm_dp_rx_init(struct csm_dp_dev *pdev);
+void csm_dp_rx_cleanup(struct csm_dp_dev *pdev);
 int csm_dp_tx(
 	struct csm_dp_dev *pdev,
 	enum csm_dp_channel ch,
