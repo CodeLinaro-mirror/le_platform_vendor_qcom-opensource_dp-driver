@@ -17,7 +17,13 @@
 #include <linux/of_device.h>
 #include "csm_dp.h"
 
+#define DEFAULT_RX_QUEUE_SIZE 1024
+
 static struct csm_dp_drv *csm_dp_pdrv;
+
+static uint rx_queue_size = DEFAULT_RX_QUEUE_SIZE;
+module_param(rx_queue_size, uint, 0444);
+MODULE_PARM_DESC(rx_queue_size, " Rx queue size, default 1024");
 
 static struct csm_dp_mhi *get_dp_mhi(struct csm_dp_dev *pdev, enum csm_dp_channel ch)
 {
@@ -182,9 +188,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 	}
 
 	for (type = 0; type < CSM_DP_RX_TYPE_LAST; type++) {
-		// TODO: add module param for rx_queue_size
-		ret = csm_dp_rxqueue_init(&pdev->rxq[type], type,
-			DEFAULT_RX_QUEUE_SIZE);
+		ret = csm_dp_rxqueue_init(&pdev->rxq[type], type, rx_queue_size);
 		if (ret) {
 			CSM_DP_ERROR("%s: failed to init rxqueue!\n", __func__);
 			return ret;

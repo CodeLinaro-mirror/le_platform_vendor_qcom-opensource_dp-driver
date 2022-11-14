@@ -64,8 +64,6 @@ struct vm_area_struct;
 #define MMAP_RX_COOKIE_TO_TYPE(cookie) \
 	(MMAP_COOKIE_TO_MEM_TYPE(cookie) - CSM_DP_MEM_TYPE_LAST)
 
-#define DEFAULT_RX_QUEUE_SIZE		1024
-
 #define CSM_DP_TX_FLAG_SG	0x01
 #define CSM_DP_TX_FLAG_MIRROR	0x04
 
