@@ -389,7 +389,7 @@ static int csm_dp_mhi_probe(
 	struct csm_dp_mempool *mempool;
 	unsigned int bus_num, vf_num;
 
-	CSM_DP_DEBUG("%s: probing mhi chan %s driver_data %ld\n",
+	CSM_DP_INFO("%s: probing mhi chan %s driver_data %ld\n",
 		     __func__, id->chan, id->driver_data);
 
 	if (__pdrv == NULL)
@@ -397,7 +397,7 @@ static int csm_dp_mhi_probe(
 
 	bus_num = mhi_get_device_bus_number(mhi_dev->mhi_cntrl);
 	vf_num = mhi_get_device_instance_id(mhi_dev->mhi_cntrl);
-	CSM_DP_DEBUG("%s: bus %d VF %d\n", __func__, bus_num, vf_num);
+	CSM_DP_INFO("%s: bus %d VF %d\n", __func__, bus_num, vf_num);
 	if (vf_num < 0) {
 		/* SR-IOV disabled, create single device node */
 		pdev = &__pdrv->dp_devs[bus_num * CSM_DP_MAX_NUM_VFS];
@@ -448,17 +448,17 @@ static int csm_dp_mhi_probe(
 	spin_lock_init(&mhi->rx_lock);
 	spin_lock_init(&mhi->tx_lock);
 
-	CSM_DP_INFO("%s: csm_dp_mhi_rx_replenish\n", __func__);
+	CSM_DP_DEBUG("%s: csm_dp_mhi_rx_replenish\n", __func__);
 	if (mempool) {
 		ret = csm_dp_mempool_dma_map(mhi_dev->mhi_cntrl->cntrl_dev, mempool);
-		CSM_DP_INFO("%s: csm_dp_mempool_dma_map pool type %d, ret %d\n",
-			    __func__, mempool->type, ret);
-		/* TODO: check ret */
+		if (ret) {
+			CSM_DP_ERROR("%s: dma_map failed, mempool type %d ret %d\n", __func__, mempool->type, ret);
+			goto err;
+		}
 
 		ret = csm_dp_mhi_rx_replenish(mhi);
 		if (ret) {
-			CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed\n",
-								__func__);
+			CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed\n", __func__);
 			goto err;
 		}
 	}
