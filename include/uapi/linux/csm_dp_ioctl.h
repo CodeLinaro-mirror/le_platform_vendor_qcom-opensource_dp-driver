@@ -103,7 +103,7 @@ enum csm_dp_rx_type {
 #define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
 
 #define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
-#define CSM_DP_DEFAULT_UL_BUF_CNT	2048
+#define CSM_DP_DEFAULT_UL_BUF_CNT	2500
 
 #define CSM_DP_INVALID_BUF_INDEX ((uint32_t)-1)
 
