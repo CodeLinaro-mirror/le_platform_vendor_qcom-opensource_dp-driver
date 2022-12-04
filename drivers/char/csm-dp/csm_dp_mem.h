@@ -102,7 +102,6 @@ struct csm_dp_mempool {
 	atomic_t ref;
 	atomic_t out_xmit;
 	struct csm_dp_mempool_stats stats;
-	char *dummy_buf;
 	spinlock_t lock;
 };
 
@@ -173,8 +172,6 @@ uint16_t csm_dp_mem_get_cluster(struct csm_dp_mem *mem, unsigned int buf_index);
 int csm_dp_mempool_dma_map(
 	struct device *dev,	/* device for iommu ops */
 	struct csm_dp_mempool *mpool);
-
-bool csm_dp_mem_ul_ring_sync(struct csm_dp_dev *pdev);
 
 /* inline */
 static __always_inline bool __ulong_in_range(

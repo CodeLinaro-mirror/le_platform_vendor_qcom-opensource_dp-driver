@@ -146,7 +146,6 @@ struct csm_dp_dev {
 	struct csm_dp_rxqueue rxq[CSM_DP_RX_TYPE_LAST];
 	struct csm_dp_core_stats stats;
 	struct work_struct alloc_work;
-	unsigned int csm_dp_outbuf_drop_sync;
 	csm_dp_ring_index_t csm_dp_prev_ul_prod_tail;
 
 	struct csm_dp_buf_cntrl	*pending_packets;

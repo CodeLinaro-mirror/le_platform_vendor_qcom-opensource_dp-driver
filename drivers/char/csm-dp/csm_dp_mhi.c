@@ -77,7 +77,7 @@ static int __mhi_rx_replenish(
 	int nr = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
 	void *buf;
 	int ret, i, to_xfer;
-	bool outofbuf, is_control = (mhi_dev->id->driver_data == CSM_DP_CH_CONTROL);
+	bool is_control = (mhi_dev->id->driver_data == CSM_DP_CH_CONTROL);
 	unsigned int cluster, c_offset;
 	struct csm_dp_buf_cntrl *first_buf_cntrl = NULL, *buf_cntrl = NULL, *prev_buf_cntrl = NULL;
 
@@ -89,21 +89,17 @@ static int __mhi_rx_replenish(
 		return ret;
 	for (; nr > 0;) {
 		to_xfer = min(CSM_DP_MAX_IOV_SIZE, nr);
-		outofbuf = false;
 		for (i = 0; i < to_xfer; i++) {
 			buf = csm_dp_mempool_get_buf(mempool, &cluster,
 								&c_offset);
-			CSM_DP_ASSERT(!buf, "can not alloc buffer, cannot use dummy_buf");
 			if (buf == NULL) {
 				mhi->stats.rx_out_of_buf++;
-				CSM_DP_DEBUG("%s: out of rx buffer!\n", __func__);
-				outofbuf = true;
-				buf = mempool->dummy_buf;
+				CSM_DP_DEBUG("%s: out of rx buffer (nr %d to_xfer %d)!\n", __func__, nr, to_xfer);
+				to_xfer = i;
+				ret = -ENOMEM;
+				goto err;
 			}
-			CSM_DP_ASSERT(!buf, "can not alloc buffer");
-			if (buf !=  mempool->dummy_buf)
-				csm_dp_set_buf_state(buf,
-					CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
+			csm_dp_set_buf_state(buf, CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
 			/* link all buffers */
 			buf_cntrl = buf - sizeof(struct csm_dp_buf_cntrl);
 			if (!first_buf_cntrl)
@@ -117,8 +113,7 @@ static int __mhi_rx_replenish(
 			mhi->ul_flag_array[i] = MHI_EOT | MHI_SG;
 			if (!is_control)
 				mhi->ul_flag_array[i] |= MHI_BEI;
-			if (mempool->mem.loc.dma_mapped &&
-					buf != mempool->dummy_buf) {
+			if (mempool->mem.loc.dma_mapped) {
 
 				mhi->ul_buf_array[i].dma_addr =
 					mempool->mem.loc.cluster_dma_addr
@@ -134,40 +129,38 @@ static int __mhi_rx_replenish(
 				      mhi->ul_buf_array,
 				      mhi->ul_flag_array,
 				      to_xfer);
-		if (ret) {
-			for (i = 0; i < to_xfer; i++) {
-				if (mhi->ul_buf_array[i].buf !=
-					mempool->dummy_buf) {
-					csm_dp_set_buf_state(
-						mhi->ul_buf_array[i].buf,
-						CSM_DP_BUF_STATE_KERNEL_FREE);
-					csm_dp_mempool_put_buf(mempool,
-						mhi->ul_buf_array[i].buf);
-				}
-			}
-			mhi->stats.rx_replenish_err++;
-			CSM_DP_ERROR("%s: failed to load rx buf!\n",
-				  __func__);
-			return ret;
+		if (ret)
+			goto err;
+
+		/* update rx head/tail */
+		if (!mhi->rx_tail_buf_cntrl) {
+			/* first repelenish (after probe) */
+			buf_cntrl->next = first_buf_cntrl;
+			mhi->rx_head_buf_cntrl = first_buf_cntrl;
+		} else {
+			mhi->rx_tail_buf_cntrl->next = first_buf_cntrl;
+			buf_cntrl->next = mhi->rx_head_buf_cntrl;
 		}
+		mhi->rx_tail_buf_cntrl = buf_cntrl;
+		first_buf_cntrl = NULL;
+
 		mhi->stats.rx_replenish++;
-		if (outofbuf) {
-			ret = -ENOMEM;
-			break;
-		}
 		nr -= to_xfer;
 	}
 
-	if (!mhi->rx_tail_buf_cntrl) {
-		/* first repelenish (after probe) */
-		buf_cntrl->next = first_buf_cntrl;
-		mhi->rx_head_buf_cntrl = first_buf_cntrl;
-	} else {
-		mhi->rx_tail_buf_cntrl->next = first_buf_cntrl;
-		buf_cntrl->next = mhi->rx_head_buf_cntrl;
-	}
-	mhi->rx_tail_buf_cntrl = buf_cntrl;
+	return ret;
 
+err:
+	for (i = 0; i < to_xfer; i++) {
+		csm_dp_set_buf_state(
+			mhi->ul_buf_array[i].buf,
+			CSM_DP_BUF_STATE_KERNEL_FREE);
+		csm_dp_mempool_put_buf(mempool,
+			mhi->ul_buf_array[i].buf);
+	}
+	mhi->stats.rx_replenish_err++;
+	CSM_DP_ERROR("%s: failed to load rx buf!\n",
+			__func__);
 	return ret;
 }
 
@@ -268,16 +261,6 @@ static void __mhi_dl_xfer_cb(
 		  result->bytes_xferd, result->transaction_status);
 
 	csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
-
-	if (result->buf_addr == mempool->dummy_buf) {
-		mhi->stats.rx_outofbuf_drop++;
-
-		if (csm_dp_mem_ul_ring_sync(pdev))
-			mhi->stats.rx_resync++;
-
-		return;
-	}
-	pdev->csm_dp_outbuf_drop_sync = 0;
 
 	if (result->transaction_status == -EOVERFLOW) {
 		CSM_DP_DEBUG("%s: overflow event ignored\n", __func__);

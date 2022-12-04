@@ -556,18 +556,6 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 	mempool->type = type;
 	mempool->signature = CSM_DP_MEMPOOL_SIG;
 
-	/*
-	 * allocate dummy buffer for out of buffer condition
-	 * if CSM_DP_MEM_TYPE_UL_* pool
-	 */
-	if (csm_dp_mem_type_is_ul(type)) {
-		mempool->dummy_buf = kzalloc(buf_sz, GFP_KERNEL);
-		if (IS_ERR_OR_NULL(mempool->dummy_buf)) {
-			mempool->dummy_buf = NULL;
-			goto cleanup;
-		}
-	}
-
 	cookie = MMAP_COOKIE(type, CSM_DP_MMAP_TYPE_MEM);
 	if (csm_dp_mem_init(&mempool->mem, buf_cnt, buf_sz, cookie)) {
 		CSM_DP_ERROR("%s: failed to initialize memory\n", __func__);
@@ -596,7 +584,6 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 cleanup_mem:
 	csm_dp_mem_cleanup(&mempool->mem);
 cleanup:
-	kfree(mempool->dummy_buf);
 	kfree(mempool);
 	return NULL;
 }
@@ -610,7 +597,6 @@ static void csm_dp_mempool_release(struct csm_dp_mempool *mempool)
 		wmb();
 		csm_dp_mem_cleanup(&mempool->mem);
 		csm_dp_ring_cleanup(&mempool->ring);
-		kfree(mempool->dummy_buf);
 		kfree(mempool);
 		CSM_DP_DEBUG("%s: mempool is freed, type=%u\n", __func__, type);
 	}
@@ -905,29 +891,4 @@ uint16_t csm_dp_mem_get_cluster(struct csm_dp_mem *mem, unsigned int buf_index)
 {
 	CSM_DP_ASSERT(buf_index >= U16_MAX * mem->loc.buf_per_cluster, "invalid buf_index");
 	return buf_index / mem->loc.buf_per_cluster;
-}
-
-#define CSM_DP_SYNC_THRESHOLD 4
-bool csm_dp_mem_ul_ring_sync(struct csm_dp_dev *pdev)
-{
-	struct csm_dp_mempool *mempool = pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL];
-	struct csm_dp_ring *ring = &mempool->ring;
-
-	if (*ring->prod_tail != pdev->csm_dp_prev_ul_prod_tail) {
-		pdev->csm_dp_outbuf_drop_sync = 0;
-		pdev->csm_dp_prev_ul_prod_tail = *ring->prod_tail;
-		return false;
-	}
-	if (pdev->csm_dp_outbuf_drop_sync++ >= CSM_DP_SYNC_THRESHOLD) {
-
-		if (*ring->prod_tail != *ring->prod_head) {
-			pr_warn("%s prod head %d prod tail %d\n", __func__,
-				*ring->prod_head, *ring->prod_tail);
-			*ring->prod_tail = *ring->prod_head;
-			wmb();
-			pdev->csm_dp_outbuf_drop_sync = 0;
-			return true;
-		}
-	}
-	return false;
 }

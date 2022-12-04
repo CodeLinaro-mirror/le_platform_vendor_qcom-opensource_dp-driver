@@ -31,8 +31,6 @@ struct csm_dp_mhi_stats {
 
 	unsigned long rx_replenish;
 	unsigned long rx_replenish_err;
-	unsigned long rx_outofbuf_drop;
-	unsigned long rx_resync;
 };
 
 /* represents MHI channel pair - Tx and Rx */
