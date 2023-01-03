@@ -255,6 +255,17 @@ static void __mhi_dl_xfer_cb(
 
 	mempool = is_control ? pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] :
 			       pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA];
+	if (!mempool) {
+		/* getting here with transaction_status == -ENOTCONN is an expected situation while
+		 * mhi devices gets removed: mempool got released part of 1st mhi device removal
+		 * (e.g. CONTROL) and we now get RX complete for 2nd mhi device (e.g. DATA).
+		 */
+		if (result->transaction_status != -ENOTCONN)
+			pr_err_ratelimited("%s: no mempool (mhi chan %s bus %d VF %d transaction_status %d)\n",
+				__func__, mhi_dev->id->chan, pdev->bus_num, pdev->vf_num,
+				result->transaction_status);
+		return;
+	}
 
 	CSM_DP_DEBUG("%s: dl_xfer_result (RX) addr=%p dir=%u bytes=%lu status=%d\n",
 		  __func__, result->buf_addr, result->dir,
@@ -430,6 +441,8 @@ static int csm_dp_mhi_probe(
 	mhi->mhi_dev = mhi_dev;
 	spin_lock_init(&mhi->rx_lock);
 	spin_lock_init(&mhi->tx_lock);
+	mhi->rx_head_buf_cntrl = NULL;
+	mhi->rx_tail_buf_cntrl = NULL;
 
 	CSM_DP_DEBUG("%s: csm_dp_mhi_rx_replenish\n", __func__);
 	if (mempool) {
@@ -472,7 +485,8 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 {
 	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
 
-	CSM_DP_INFO("%s\n", __func__);
+	CSM_DP_INFO("%s: mhi chan %s driver_data %ld bus %d VF %d\n",
+		__func__, mhi_dev->id->chan, mhi_dev->id->driver_data, pdev->bus_num, pdev->vf_num);
 
 	if (mhi_dev->id->driver_data == CSM_DP_CH_DATA) {
 		kthread_stop(pdev->mhi_data_dev.tx_poll_thread);
