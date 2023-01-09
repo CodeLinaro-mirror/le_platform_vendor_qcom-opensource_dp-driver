@@ -229,17 +229,19 @@ int csm_dp_tx(
 
 	mhi = get_dp_mhi(pdev, ch);
 
-	if (!csm_dp_mhi_is_ready(mhi)) {
-		CSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
-		pdev->stats.tx_err++;
-		return -EIO;
-	}
-
 	if (flag & CSM_DP_TX_FLAG_SG) {
 		if (iov_nr > CSM_DP_MAX_SG_IOV_SIZE) {
 			CSM_DP_ERROR("%s: sg iov size too big!\n", __func__);
 			return -EINVAL;
 		}
+	}
+
+	atomic_inc(&mhi->mhi_dev_refcnt);
+	if (!csm_dp_mhi_is_ready(mhi)) {
+		atomic_dec(&mhi->mhi_dev_refcnt);
+		CSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
+		pdev->stats.tx_err++;
+		return -EIO;
 	}
 
 	spin_lock_bh(&mhi->tx_lock);
@@ -292,6 +294,7 @@ int csm_dp_tx(
 	else if (!to_send)
 		pdev->stats.tx_cnt++;
 	spin_unlock_bh(&mhi->tx_lock);
+	atomic_dec(&mhi->mhi_dev_refcnt);
 	return ret;
 }
 
@@ -301,8 +304,11 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	struct csm_dp_buf_cntrl *cur_packet;
 	size_t n = 0, remain = iov_nr;
 
-	if (!csm_dp_mhi_is_ready(&pdev->mhi_data_dev))
+	atomic_inc(&pdev->mhi_data_dev.mhi_dev_refcnt);
+	if (!csm_dp_mhi_is_ready(&pdev->mhi_data_dev)) {
+		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 		return 0;
+	}
 
 	/*
 	 * poll to get packets from MHI. This will cause dl_xfer (RX callback) to get called which
@@ -310,11 +316,13 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	 */
 	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
 	if (ret < 0)
-		pr_err("Error rx polling %d\n", ret);
+		pr_err_ratelimited("%s: Error rx polling %d\n", __func__, ret);
 
 	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
-		pr_err("Error rx replenish %d\n", ret);
+		pr_err_ratelimited("%s: Error rx replenish %d\n", __func__, ret);
+
+	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 
 	/* fill iov with the received packets */
 	cur_packet = pdev->pending_packets;
@@ -360,10 +368,16 @@ static int csm_dp_poll(struct napi_struct *napi, int budget)
 	int ret;
 
 	pdev = container_of(napi, struct csm_dp_dev, napi);
+	atomic_inc(&pdev->mhi_control_dev.mhi_dev_refcnt);
+	if (!csm_dp_mhi_is_ready(&pdev->mhi_control_dev)) {
+		atomic_dec(&pdev->mhi_control_dev.mhi_dev_refcnt);
+		return 0;
+	}
+
 	rx_work = mhi_poll(pdev->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);
 	if (rx_work < 0) {
+		pr_err("%s: Error Rx polling ret:%d\n", __func__, rx_work);
 		rx_work = 0;
-		pr_err("Error Rx polling ret:%d\n", rx_work);
 		napi_complete(napi);
 		goto exit_poll;
 	}
@@ -376,6 +390,7 @@ static int csm_dp_poll(struct napi_struct *napi, int budget)
 	else
 		pdev->stats.rx_budget_overflow++;
 exit_poll:
+	atomic_dec(&pdev->mhi_control_dev.mhi_dev_refcnt);
 	return rx_work;
 }
 

@@ -36,6 +36,8 @@ struct csm_dp_mhi_stats {
 /* represents MHI channel pair - Tx and Rx */
 struct csm_dp_mhi {
 	struct mhi_device *mhi_dev;
+	bool mhi_dev_destroyed;
+	atomic_t mhi_dev_refcnt;
 	struct csm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	spinlock_t tx_lock;
@@ -77,7 +79,7 @@ static inline int csm_dp_mhi_n_tx(struct csm_dp_mhi *mhi,
 
 static inline bool csm_dp_mhi_is_ready(struct csm_dp_mhi *mhi)
 {
-	return ((mhi->mhi_dev) ? true : false);
+	return mhi->mhi_dev && !mhi->mhi_dev_destroyed;
 }
 
 #endif /* __CSM_DP_MHI_H__ */

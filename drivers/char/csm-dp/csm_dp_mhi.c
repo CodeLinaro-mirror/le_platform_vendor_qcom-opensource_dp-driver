@@ -439,6 +439,8 @@ static int csm_dp_mhi_probe(
 	}
 
 	mhi->mhi_dev = mhi_dev;
+	mhi->mhi_dev_destroyed = false;
+	atomic_set(&mhi->mhi_dev_refcnt, 0);
 	spin_lock_init(&mhi->rx_lock);
 	spin_lock_init(&mhi->tx_lock);
 	mhi->rx_head_buf_cntrl = NULL;
@@ -484,18 +486,34 @@ err:
 static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 {
 	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
+	struct csm_dp_mhi *mhi;
 
 	CSM_DP_INFO("%s: mhi chan %s driver_data %ld bus %d VF %d\n",
 		__func__, mhi_dev->id->chan, mhi_dev->id->driver_data, pdev->bus_num, pdev->vf_num);
 
-	if (mhi_dev->id->driver_data == CSM_DP_CH_DATA) {
-		kthread_stop(pdev->mhi_data_dev.tx_poll_thread);
-		hrtimer_cancel(&pdev->mhi_data_dev.poll_timer);
+	switch (mhi_dev->id->driver_data) {
+	case CSM_DP_CH_CONTROL:
+		mhi = &pdev->mhi_control_dev;
+		break;
+	case CSM_DP_CH_DATA:
+		mhi = &pdev->mhi_data_dev;
+		kthread_stop(mhi->tx_poll_thread);
+		hrtimer_cancel(&mhi->poll_timer);
+		break;
+	default:
+		CSM_DP_ERROR("%s: unexpected driver_data %ld\n", __func__, mhi_dev->id->driver_data);
+		return;
 	}
 
 	mhi_unprepare_from_transfer(mhi_dev);
 
-	csm_dp_cdev_del(pdev);
+	mhi->mhi_dev_destroyed = true;
+	/* wait for idle mhi_dev */
+	while (atomic_read(&mhi->mhi_dev_refcnt) > 0) {
+		CSM_DP_DEBUG("%s: mhi_dev_refcnt %d\n", __func__, atomic_read(&mhi->mhi_dev_refcnt));
+		msleep(10);
+	}
+	mhi->mhi_dev = NULL;
 }
 
 static struct mhi_device_id csm_dp_mhi_match_table[] = {

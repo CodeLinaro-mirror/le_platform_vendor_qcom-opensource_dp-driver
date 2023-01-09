@@ -133,14 +133,26 @@ static inline void __buf_mem_free(struct csm_dp_mem_loc *loc)
  * get the MHI controller dev - needed for dma operations. Control and data
  * channels refer to same MHI controller dev.
  */
-struct device *get_mhi_cntrl_dev(struct csm_dp_dev *pdev)
+static struct device *get_mhi_cntrl_dev(struct csm_dp_dev *pdev)
 {
+	atomic_inc(&pdev->mhi_control_dev.mhi_dev_refcnt);
+	atomic_inc(&pdev->mhi_data_dev.mhi_dev_refcnt);
+
 	if (csm_dp_mhi_is_ready(&pdev->mhi_control_dev))
 		return pdev->mhi_control_dev.mhi_dev->mhi_cntrl->cntrl_dev;
 	else if (csm_dp_mhi_is_ready(&pdev->mhi_data_dev))
 		return pdev->mhi_data_dev.mhi_dev->mhi_cntrl->cntrl_dev;
 
+	atomic_dec(&pdev->mhi_control_dev.mhi_dev_refcnt);
+	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
+
 	return NULL;
+}
+
+static void put_mhi_cntrl_dev(struct csm_dp_dev *pdev)
+{
+	atomic_dec(&pdev->mhi_control_dev.mhi_dev_refcnt);
+	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 }
 
 int csm_dp_ring_init(
@@ -444,6 +456,10 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 	struct csm_dp_dev *pdev = mempool->dp_dev;
 	int i;
 	unsigned int size;
+	struct device *mhi_cntrl_dev = get_mhi_cntrl_dev(pdev);
+
+	if (!mhi_cntrl_dev)
+		return;
 
 	spin_lock(&mempool->lock);
 	if (mem->loc.dma_mapped) {
@@ -451,13 +467,13 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 		for (i = 0; i < mem->loc.num_cluster; i++) {
 			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
-					get_mhi_cntrl_dev(pdev),
+					mhi_cntrl_dev,
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
 			} else {
 				dma_unmap_single(
-					get_mhi_cntrl_dev(pdev),
+					mhi_cntrl_dev,
 					mem->loc.cluster_dma_addr[i],
 					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
@@ -470,6 +486,8 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 
 	__buf_mem_free(&mem->loc);
 	memset(mem, 0, sizeof(*mem));
+
+	put_mhi_cntrl_dev(pdev);
 }
 
 static int csm_dp_mem_get_cfg(
@@ -485,6 +503,11 @@ static int csm_dp_mem_get_cfg(
 	cfg->cluster_size = CSM_DP_MEMPOOL_CLUSTER_SIZE;
 	cfg->num_cluster = mem->loc.num_cluster;
 	cfg->buf_per_cluster = mem->loc.buf_per_cluster;
+
+	CSM_DP_DEBUG("%s: buf_sz %d buf_cnt %d buf_overhead_sz %d cluster_size %d num_cluster %d buf_per_cluster %d\n",
+		__func__, cfg->buf_sz, cfg->buf_cnt, cfg->buf_overhead_sz,
+		cfg->cluster_size, cfg->num_cluster, cfg->buf_per_cluster);
+
 	return 0;
 }
 
@@ -565,8 +588,12 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 	if (may_map) {
 		struct device *dev = get_mhi_cntrl_dev(pdev);
 
-		if (dev && csm_dp_mempool_dma_map(dev, mempool))
-			goto cleanup_mem;
+		if (dev) {
+			int ret = csm_dp_mempool_dma_map(dev, mempool);
+			put_mhi_cntrl_dev(pdev);
+			if (ret)
+				goto cleanup_mem;
+		}
 	}
 	cookie = MMAP_COOKIE(type, CSM_DP_MMAP_TYPE_RING);
 	if (csm_dp_ring_init(&mempool->ring, ring_sz, cookie)) {
