@@ -380,6 +380,9 @@ static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 	for (type = 0, n = 0; type < CSM_DP_RX_TYPE_LAST; type++) {
 		if (cdev->rxqueue_vma[type].vma) {
 			rxq = &pdev->rxq[type];
+			if (!rxq->inited)
+				continue;
+
 			poll_wait(file, &rxq->wq, wait);
 			n++;
 		}
@@ -392,6 +395,9 @@ static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 	for (type = 0; type < CSM_DP_RX_TYPE_LAST; type++) {
 		if (cdev->rxqueue_vma[type].vma) {
 			rxq = &pdev->rxq[type];
+			if (!rxq->inited)
+				continue;
+
 			if (!csm_dp_ring_is_empty(rxq->ring)) {
 				mask |= POLLIN | POLLRDNORM;
 				break;
@@ -717,6 +723,11 @@ static int __cdev_rxqueue_mmap(
 		return -EINVAL;
 	}
 
+	if (!pdev->rxq[type].inited) {
+		CSM_DP_ERROR("%s: rx queue type %d not initialized\n", __func__, type);
+		return -EINVAL;
+	}
+
 	if (rxq_vma[type].vma) {
 		CSM_DP_ERROR("%s: rxqueue already mapped\n", __func__);
 		return -EBUSY;
@@ -751,10 +762,12 @@ static int __cdev_rxqueue_mmap(
 static int csm_dp_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct csm_dp_cdev *cdev = (struct csm_dp_cdev *)file->private_data;
+	struct csm_dp_dev *pdev = cdev->pdev;
 	unsigned int cookie;
 	int ret = 0;
 
-	CSM_DP_DEBUG("%s: start=%lx end=%lx off=%lx proto=%lx flag=%lx",
+	mutex_lock(&pdev->cdev_lock);
+	CSM_DP_INFO("%s: start=%lx end=%lx off=%lx proto=%lx flag=%lx",
 		  __func__, vma->vm_start, vma->vm_end, vma->vm_pgoff,
 		  (unsigned long)vma->vm_page_prot.pgprot, vma->vm_flags);
 
@@ -764,6 +777,9 @@ static int csm_dp_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 		ret = __cdev_rxqueue_mmap(cdev, vma);
 	else
 		ret = __cdev_mempool_mmap(cdev, vma);
+
+	CSM_DP_INFO("%s: end\n", __func__);
+	mutex_unlock(&pdev->cdev_lock);
 
 	return ret;
 }
@@ -780,6 +796,8 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 
+	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+
 	cdev->pdev = pdev;
 	cdev->pid = current->tgid;
 
@@ -789,9 +807,10 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 	list_add_tail(&cdev->list, &pdev->cdev_head);
 	mutex_unlock(&pdev->cdev_lock);
 
-	CSM_DP_DEBUG("%s: cdev=%p pid=%u\n", __func__, cdev, cdev->pid);
-
 	file->private_data = cdev;
+
+	CSM_DP_INFO("%s: end cdev=%p pid=%u bus_num %d vf_num %d\n", __func__, cdev, cdev->pid, pdev->bus_num, pdev->vf_num);
+
 	return 0;
 }
 
@@ -802,18 +821,21 @@ static int csm_dp_cdev_close(struct inode *inode, struct file *file)
 	struct csm_dp_dev *pdev = cdev->pdev;
 	int type;
 
-	CSM_DP_DEBUG("%s: device close, pid=%u, cdev=%p\n",
-		  __func__, cdev->pid, cdev);
+	mutex_lock(&pdev->cdev_lock);
+	CSM_DP_INFO("%s: start pid=%u, cdev=%p bus_num %d vf_num %d\n",
+		  __func__, cdev->pid, cdev, pdev->bus_num, pdev->vf_num);
 
 	for (type = 0; type < CSM_DP_MEM_TYPE_LAST; type++, mempool_vma++) {
 		if (mempool_vma->usr_alloc)
 			csm_dp_mempool_put(*mempool_vma->pp_mempool);
 	}
-	mutex_lock(&pdev->cdev_lock);
 	list_del(&cdev->list);
-	mutex_unlock(&pdev->cdev_lock);
 
 	kfree(cdev);
+
+	CSM_DP_INFO("%s: end bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+	mutex_unlock(&pdev->cdev_lock);
+
 	return 0;
 }
 
@@ -830,6 +852,8 @@ static const struct file_operations csm_dp_cdev_fops = {
 int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 {
 	int ret;
+
+	CSM_DP_INFO("%s: start\n", __func__);
 
 	pdrv->dev_class = class_create(THIS_MODULE, CSM_DP_DEV_CLASS_NAME);
 	if (IS_ERR_OR_NULL(pdrv->dev_class)) {
@@ -852,6 +876,8 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 
 void csm_dp_cdev_cleanup(struct csm_dp_drv *pdrv)
 {
+	CSM_DP_INFO("%s: start\n", __func__);
+
 	if (!pdrv->dev_class)
 		return;
 
@@ -860,6 +886,8 @@ void csm_dp_cdev_cleanup(struct csm_dp_drv *pdrv)
 	pdrv->dev_class = NULL;
 
 	// TODO: cleanup cdevs
+
+	CSM_DP_INFO("%s: end\n", __func__);
 }
 
 // called from MHI probe for each VF
@@ -870,17 +898,21 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 	struct csm_dp_drv *pdrv = pdev->pdrv;
 	unsigned int index = pdev - pdrv->dp_devs;
 
+	mutex_lock(&pdev->cdev_lock);
+	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+
 	if (pdev->cdev_inited) {
 		CSM_DP_ERROR("%s: cdev already initialized\n", __func__);
+		mutex_unlock(&pdev->cdev_lock);
 		return -EINVAL;
 	}
 
 	ret = csm_dp_rx_init(pdev);
-	if (ret)
+	if (ret) {
+		mutex_unlock(&pdev->cdev_lock);
 		return ret;
+	}
 
-	mutex_init(&pdev->cdev_lock);
-	INIT_LIST_HEAD(&pdev->cdev_head);
 
 	cdev_init(&pdev->cdev, &csm_dp_cdev_fops);
 	new_devno = MKDEV(MAJOR(pdrv->devno), index);
@@ -890,7 +922,7 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 		goto err;
 	}
 
-	dev = device_create(pdrv->dev_class, mhi_dev, new_devno, pdrv, "csm%d-dp%d",
+	dev = device_create(pdrv->dev_class, NULL, new_devno, pdrv, "csm%d-dp%d",
 			    pdev->bus_num, pdev->vf_num - 1);
 	if (IS_ERR_OR_NULL(dev)) {
 		CSM_DP_ERROR("%s: device_create failed\n", __func__);
@@ -901,11 +933,14 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 
 	pdev->cdev_inited = true;
 
+	CSM_DP_INFO("%s: end bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+	mutex_unlock(&pdev->cdev_lock);
+
 	return 0;
 
 err:
 	csm_dp_rx_cleanup(pdev);
-	mutex_destroy(&pdev->cdev_lock);
+	mutex_unlock(&pdev->cdev_lock);
 	return ret;
 }
 
@@ -913,12 +948,32 @@ void csm_dp_cdev_del(struct csm_dp_dev *pdev)
 {
 	struct csm_dp_drv *pdrv = pdev->pdrv;
 
-	if (!pdev->cdev_inited)
+	mutex_lock(&pdev->cdev_lock);
+	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+
+	if (!pdev->cdev_inited) {
+		mutex_unlock(&pdev->cdev_lock);
 		return;
+	}
+	pdev->cdev_inited = false;
 
 	device_destroy(pdrv->dev_class, pdev->cdev.dev);
 	cdev_del(&pdev->cdev);
+
+	/* wait for idle mempools before Rx cleanup */
+	while (1) {
+		int control_ref = atomic_read(&pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL]->ref);
+		int data_ref = atomic_read(&pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA]->ref);
+
+		CSM_DP_DEBUG("%s: UL_CONTROL ref %d UL_DATA ref %d\n", __func__, control_ref, data_ref);
+		if (control_ref == 1 && data_ref == 1)
+			break;
+		mutex_unlock(&pdev->cdev_lock);
+		msleep(100);
+		mutex_lock(&pdev->cdev_lock);
+	}
 	csm_dp_rx_cleanup(pdev);
-	mutex_destroy(&pdev->cdev_lock);
-	pdev->cdev_inited = false;
+
+	CSM_DP_INFO("%s: end bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
+	mutex_unlock(&pdev->cdev_lock);
 }

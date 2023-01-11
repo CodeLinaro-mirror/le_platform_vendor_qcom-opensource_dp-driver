@@ -82,11 +82,11 @@ static int csm_dp_rxqueue_init(
 static void csm_dp_rxqueue_cleanup(struct csm_dp_rxqueue *rxq)
 {
 	if (rxq->inited) {
+		rxq->inited = false;
 		wake_up(&rxq->wq);
 		csm_dp_ring_cleanup(rxq->ring);
 		kfree(rxq->ring);
 		rxq->ring = NULL;
-		rxq->inited = false;
 	}
 }
 
@@ -423,6 +423,8 @@ static int csm_dp_core_init(struct csm_dp_drv *pdrv)
 
 		pdev->pdrv = pdrv;
 		mutex_init(&pdev->mempool_lock);
+		mutex_init(&pdev->cdev_lock);
+		INIT_LIST_HEAD(&pdev->cdev_head);
 		init_dummy_netdev(&pdev->dummy_dev);
 		netif_napi_add(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
 							CSM_DP_NAPI_WEIGHT);
