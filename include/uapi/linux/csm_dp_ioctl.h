@@ -46,6 +46,9 @@
 #define CSM_DP_IOCTL_RX_POLL	\
 		_IOWR(CSM_DP_IOCTL_BASE, 7, struct iovec)
 
+#define CSM_DP_IOCTL_GET_STATS	\
+		_IOWR(CSM_DP_IOCTL_BASE, 8, struct csm_dp_ioctl_getstats)
+
 #define CSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
 
 enum csm_dp_mem_type {
@@ -227,6 +230,14 @@ struct csm_dp_ioctl_tx {
 	enum csm_dp_channel ch;
 	struct iovec iov;
 	__u32 flags;	/* CSM_DP_IOCTL_TX_FLAG_xxx */
+};
+
+struct csm_dp_ioctl_getstats {
+	enum csm_dp_channel ch;	/* IN param, set by caller */
+	__u64 tx_cnt;
+	__u64 tx_acked;
+	__u64 rx_cnt;
+	__u64 reserved[10];	/* for future use */
 };
 
 static inline int csm_dp_mem_type_is_valid(enum csm_dp_mem_type type)

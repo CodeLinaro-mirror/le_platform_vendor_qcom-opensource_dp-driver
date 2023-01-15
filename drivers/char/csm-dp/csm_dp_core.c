@@ -360,6 +360,29 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	return n;
 }
 
+int csm_dp_get_stats(struct csm_dp_dev *pdev, struct csm_dp_ioctl_getstats *stats)
+{
+	struct csm_dp_mhi *mhi = NULL;
+
+	switch (stats->ch) {
+	case CSM_DP_CH_CONTROL:
+		mhi = &pdev->mhi_control_dev;
+		break;
+	case CSM_DP_CH_DATA:
+		mhi = &pdev->mhi_data_dev;
+		break;
+	}
+
+	if (!mhi)
+		return -EINVAL;
+
+	stats->tx_cnt = mhi->stats.tx_cnt;
+	stats->tx_acked = mhi->stats.tx_acked;
+	stats->rx_cnt = mhi->stats.rx_cnt;
+
+	return 0;
+}
+
 /* napi function to replenish control channel */
 static int csm_dp_poll(struct napi_struct *napi, int budget)
 {

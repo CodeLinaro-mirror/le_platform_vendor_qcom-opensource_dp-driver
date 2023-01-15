@@ -367,6 +367,29 @@ static int __cdev_ioctl_rx_poll(struct csm_dp_cdev *cdev, unsigned long ioarg)
 	return __cdev_rx_poll(cdev, iov.iov_base, iov.iov_len);
 }
 
+static int __cdev_ioctl_get_stats(struct csm_dp_cdev *cdev, unsigned long ioarg)
+{
+	struct csm_dp_ioctl_getstats req;
+	struct csm_dp_dev *pdev = cdev->pdev;
+	int ret;
+
+	if (copy_from_user(&req, (void __user *)ioarg, sizeof(req)))
+		return -EFAULT;
+
+	mutex_lock(&pdev->cdev_lock);
+	ret = csm_dp_get_stats(pdev, &req);
+	mutex_unlock(&pdev->cdev_lock);
+	if (ret)
+		return ret;
+
+	if (copy_to_user((void __user *)ioarg, &req, sizeof(req))) {
+		CSM_DP_ERROR("%s: copy_to_user failed\n", __func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
 static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 {
 	struct csm_dp_cdev *cdev = (struct csm_dp_cdev *)file->private_data;
@@ -436,6 +459,9 @@ static long csm_dp_cdev_ioctl(
 		break;
 	case CSM_DP_IOCTL_RX_POLL:
 		ret = __cdev_ioctl_rx_poll(cdev, ioarg);
+		break;
+	case CSM_DP_IOCTL_GET_STATS:
+		ret = __cdev_ioctl_get_stats(cdev, ioarg);
 		break;
 	default:
 		break;
