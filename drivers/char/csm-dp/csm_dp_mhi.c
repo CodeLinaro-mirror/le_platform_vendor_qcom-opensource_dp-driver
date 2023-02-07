@@ -20,6 +20,11 @@
 
 static struct csm_dp_drv *__pdrv;
 
+/* MHI/PCIe max rate is ~300 packets in 1ms (measured empirically).
+ * Tx poll interval, together with poll budget must be faster than that.
+ */
+#define TX_POLL_INTERVAL_NS 1000000 /* 1ms */
+#define MHI_POLL_BUDGET (CSM_DP_NAPI_WEIGHT * 8)
 
 /*
  * Dump a packet.
@@ -354,7 +359,7 @@ static int csm_dp_mhi_tx_poll_thread(void *data)
 
 	while (!kthread_should_stop()) {
 		wait_for_completion(&pdev->mhi_data_dev.poll_comp);
-		ret = mhi_poll(mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
+		ret = mhi_poll(mhi_dev, MHI_POLL_BUDGET, DMA_TO_DEVICE);
 		if (ret < 0)
 			pr_err_ratelimited("Error Tx polling ret:%d\n", ret);
 	}
@@ -368,7 +373,7 @@ enum hrtimer_restart csm_dp_mhi_poll_timer_handler(struct hrtimer *timer)
 
 	complete(&mhi->poll_comp);
 
-	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, 1000000)); /* 1ms */
+	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, TX_POLL_INTERVAL_NS));
 
 	return HRTIMER_RESTART;
 }
@@ -471,8 +476,7 @@ static int csm_dp_mhi_probe(
 
 		hrtimer_init(&mhi->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		mhi->poll_timer.function = csm_dp_mhi_poll_timer_handler;
-		 /* start in 1ms */
-		hrtimer_start(&mhi->poll_timer, ktime_set(0, 1000000), HRTIMER_MODE_REL);
+		hrtimer_start(&mhi->poll_timer, ktime_set(0, TX_POLL_INTERVAL_NS), HRTIMER_MODE_REL);
 	}
 
 	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
