@@ -2,12 +2,14 @@ PACKAGE_NAME=PKG_NAME
 PACKAGE_VERSION=PKG_LONG_VERSION
 PACKAGE_SH_VERSION=PKG_SHORT_VERSION
 
-MAKE[0]="make DP_MODULE_VERSION=PKG_LONG_VERSION KBUILD_EXTRA_SYMBOLS=mhi-syms/Module.symvers MHI_BUILD_ROOT=/usr/src/mhi-host-PKG_SHORT_VERSION/mhi-host"
+MAKE[0]="make DP_MODULE_VERSION=PKG_LONG_VERSION KBUILD_EXTRA_SYMBOLS=/lib/modules/$kernelver/Module-mhi.symvers MHI_BUILD_ROOT=/usr/src/mhi-host-PKG_SHORT_VERSION/mhi-host"
 
 BUILT_MODULE_NAME[0]=csm_dp
 BUILT_MODULE_LOCATION[0]=dp-driver/drivers/char/csm-dp
 DEST_MODULE_LOCATION[0]=/extra
 STRIP[0]=no
 
-AUTOINSTALL=yes
+AUTOINSTALL=no
 NO_WEAK_MODULES=yes
+POST_BUILD="dp-driver/rpm/post-build-remove.sh build"
+POST_REMOVE="dp-driver/rpm/post-build-remove.sh remove"
