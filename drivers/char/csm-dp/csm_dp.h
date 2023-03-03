@@ -76,6 +76,8 @@ struct vm_area_struct;
 #define CSM_DP_MAX_NUM_VFS 4    /* max Virtual Functions that single Lassen device can expose */
 #define CSM_DP_MAX_NUM_DEVS (CSM_DP_MAX_NUM_BUSES * CSM_DP_MAX_NUM_VFS)
 
+#define ch_name(ch) (ch == CSM_DP_CH_CONTROL) ? "CONTROL" : "DATA"
+
 /*
  * vma mapping for mempool which includes
  * - buffer memory region

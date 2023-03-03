@@ -195,8 +195,8 @@ static void __mhi_ul_xfer_cb(
 	struct csm_dp_mempool *mempool;
 	struct csm_dp_buf_cntrl *buf_cntrl;
 
-	CSM_DP_DEBUG("%s: ul_xfer_result (TX complete) addr=%p dir=%u bytes=%lu status=%d\n",
-		     __func__, result->buf_addr, result->dir,
+	CSM_DP_DEBUG("%s: (TX complete) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
+		     __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
 		     result->bytes_xferd, result->transaction_status);
 
 	csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
@@ -266,14 +266,14 @@ static void __mhi_dl_xfer_cb(
 		 * (e.g. CONTROL) and we now get RX complete for 2nd mhi device (e.g. DATA).
 		 */
 		if (result->transaction_status != -ENOTCONN)
-			pr_err_ratelimited("%s: no mempool (mhi chan %s bus %d VF %d transaction_status %d)\n",
-				__func__, mhi_dev->id->chan, pdev->bus_num, pdev->vf_num,
+			pr_err_ratelimited("%s: no mempool (ch %s bus %d VF %d status %d)\n",
+				__func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num,
 				result->transaction_status);
 		return;
 	}
 
-	CSM_DP_DEBUG("%s: dl_xfer_result (RX) addr=%p dir=%u bytes=%lu status=%d\n",
-		  __func__, result->buf_addr, result->dir,
+	CSM_DP_DEBUG("%s: (RX) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
+		  __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
 		  result->bytes_xferd, result->transaction_status);
 
 	csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);

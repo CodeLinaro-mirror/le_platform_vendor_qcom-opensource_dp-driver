@@ -110,7 +110,8 @@ static int __cdev_tx(
 	struct csm_dp_buf_cntrl *buf_cntrl = NULL, *prev_buf_cntrl = NULL;
 	unsigned long b_backtrack;
 
-	CSM_DP_DEBUG("%s: iov_nr=%u\n", __func__, iov_nr);
+	CSM_DP_DEBUG("%s: ch %s bus %d VF %d iov_nr %u sg %d\n",
+		__func__, ch_name(ch), pdev->bus_num, pdev->vf_num, iov_nr, sg);
 	if (iov_nr > CSM_DP_MAX_IOV_SIZE)
 		return  -E2BIG;
 
@@ -195,8 +196,8 @@ static int __cdev_tx(
 		} else
 			dma_addr[n] = 0;
 
-		CSM_DP_DEBUG("%s: start tx, kaddr=%p len=%lu\n",
-			  __func__, iov[n].iov_base, iov[n].iov_len);
+		CSM_DP_DEBUG("%s: start tx iov[%d], kaddr=%p len=%lu\n",
+			  __func__, n, iov[n].iov_base, iov[n].iov_len);
 	}
 
 	buf_cntrl->next = NULL;
