@@ -53,17 +53,11 @@ struct csm_dp_mem {
 };
 
 struct csm_dp_ring_opstats {
-	unsigned long read_ok;
-	unsigned long read_empty;
-	unsigned long cons_head_updt_retry;
-	unsigned long cons_tail_updt_backoff;
-	unsigned long cons_tail_updt;
+	atomic_t read_ok;
+	atomic_t read_empty;
 
-	unsigned long write_ok;
-	unsigned long write_full;
-	unsigned long prod_head_updt_retry;
-	unsigned long prod_tail_updt_backoff;
-	unsigned long prod_tail_updt;
+	atomic_t write_ok;
+	atomic_t write_full;
 };
 
 struct csm_dp_ring {

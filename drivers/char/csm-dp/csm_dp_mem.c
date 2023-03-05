@@ -241,16 +241,14 @@ again:
 	prod_tail = *ring->prod_tail;
 	rmb();	/* Get current cons_head and prod_tail */
 	if ((cons_head & mask) == (prod_tail & mask)) {
-		ring->opstats.read_empty++;
+		atomic_inc(&ring->opstats.read_empty);
 		return -EAGAIN;
 	}
 	cons_next = cons_head + 1;
 	if (atomic_cmpxchg((atomic_t *)ring->cons_head,
 			   cons_head,
-			   cons_next) != cons_head) {
-		ring->opstats.cons_head_updt_retry++;
+			   cons_next) != cons_head)
 		goto again;
-	}
 
 	/* Read the ring */
 	data = ring->element[(cons_head & mask)].element_data;
@@ -259,13 +257,12 @@ again:
 	if (element_ptr)
 		*element_ptr = data;
 
+	atomic_inc(&ring->opstats.read_ok);
+
 	/* Potential two consumer is updating */
 	while(atomic_cmpxchg((atomic_t *)ring->cons_tail,
 			   cons_head,
-			   cons_next) != cons_head)
-		ring->opstats.cons_tail_updt_backoff++;
-
-	ring->opstats.cons_tail_updt++;
+			   cons_next) != cons_head);
 
 	return 0;
 }
@@ -292,30 +289,25 @@ again:
 	if ((prod_next & mask) == (cons_tail & mask)) {
 		rmb();
 		if (prod_head == *ring->prod_head && cons_tail == *ring->cons_tail) {
-			ring->opstats.write_full++;
+			atomic_inc(&ring->opstats.write_full);
 			return -EAGAIN;
 		}
 		goto again;
 	}
 	if (atomic_cmpxchg((atomic_t *)ring->prod_head,
 			   prod_head,
-			   prod_next) != prod_head) {
-		ring->opstats.prod_head_updt_retry++;
+			   prod_next) != prod_head)
 		goto again;
-	}
 
 	ring->element[(prod_head & mask)].element_data = data;
 	wmb();	/* Ensure element is written */
 
-	ring->opstats.write_ok++;
+	atomic_inc(&ring->opstats.write_ok);
 
 	/* Potential two producer is updating */
 	while(atomic_cmpxchg((atomic_t *)ring->prod_tail,
 			   prod_head,
-			   prod_next) != prod_head)
-		ring->opstats.prod_tail_updt_backoff++;
-
-	ring->opstats.prod_tail_updt++;
+			   prod_next) != prod_head);
 
 	return 0;
 }
