@@ -134,7 +134,7 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 			CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
 	offset = csm_dp_get_mem_offset(addr, &mempool->mem.loc, cl);
-	if (csm_dp_ring_write(rxq->ring, offset, 0)) {
+	if (csm_dp_ring_write(rxq->ring, offset)) {
 		CSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
 		goto free_rxbuf;
 	}

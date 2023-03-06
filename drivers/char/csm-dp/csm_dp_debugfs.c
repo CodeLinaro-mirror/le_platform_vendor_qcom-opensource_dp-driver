@@ -100,22 +100,16 @@ static int __csm_dp_ring_opstats_dump(
 	seq_printf(s, "    Ok:                %lu\n", stats->read_ok);
 	seq_printf(s, "    Empty:             %lu\n", stats->read_empty);
 	seq_printf(s, "    TailUpdt:          %lu\n", stats->cons_tail_updt);
-	seq_printf(s, "    TailNoUpdt:        %lu\n", stats->cons_tail_no_updt);
 	seq_printf(s, "    TailUpdtBackOff:   %lu\n",
 		   stats->cons_tail_updt_backoff);
-	seq_printf(s, "    TailUpdtStop:      %lu\n",
-		   stats->cons_tail_updt_stop);
 	seq_printf(s, "    HdrUpdtRetry:      %lu\n",
 		   stats->cons_head_updt_retry);
 	seq_puts(s, "Write:\n");
 	seq_printf(s, "    Ok:                %lu\n", stats->write_ok);
 	seq_printf(s, "    Full:              %lu\n", stats->write_full);
 	seq_printf(s, "    TailUpdt:          %lu\n", stats->prod_tail_updt);
-	seq_printf(s, "    TailNoUpdt:        %lu\n", stats->prod_tail_no_updt);
 	seq_printf(s, "    TailUpdtBackOff:   %lu\n",
 		   stats->prod_tail_updt_backoff);
-	seq_printf(s, "    TailUpdtStop:      %lu\n",
-		   stats->prod_tail_updt_stop);
 	seq_printf(s, "    HdrUpdtRetry:      %lu\n",
 		   stats->prod_head_updt_retry);
 	return 0;

@@ -56,18 +56,14 @@ struct csm_dp_ring_opstats {
 	unsigned long read_ok;
 	unsigned long read_empty;
 	unsigned long cons_head_updt_retry;
-	unsigned long cons_tail_no_updt;
 	unsigned long cons_tail_updt_backoff;
 	unsigned long cons_tail_updt;
-	unsigned long cons_tail_updt_stop;
 
 	unsigned long write_ok;
 	unsigned long write_full;
 	unsigned long prod_head_updt_retry;
-	unsigned long prod_tail_no_updt;
 	unsigned long prod_tail_updt_backoff;
 	unsigned long prod_tail_updt;
-	unsigned long prod_tail_updt_stop;
 };
 
 struct csm_dp_ring {
@@ -153,11 +149,8 @@ int csm_dp_ring_init(
 
 void csm_dp_ring_cleanup(struct csm_dp_ring *ring);
 
-int csm_dp_ring_read(struct csm_dp_ring *ring, csm_dp_ring_element_data_t *element_data,
-		unsigned int *flag);
-
-int csm_dp_ring_write(struct csm_dp_ring *ring, csm_dp_ring_element_data_t element_data,
-		unsigned int flag);
+int csm_dp_ring_read(struct csm_dp_ring *ring, csm_dp_ring_element_data_t *element_data);
+int csm_dp_ring_write(struct csm_dp_ring *ring, csm_dp_ring_element_data_t element_data);
 
 bool csm_dp_ring_is_empty(struct csm_dp_ring *ring);
 

@@ -163,7 +163,6 @@ int csm_dp_ring_init(
 	unsigned int allocsz = ringsz * sizeof(*ring->element);
 	char *aligned_ptr;
 	csm_dp_ring_element_t *elem_p;
-	int i;
 
 	/* cons and prod index space, aligned to cache line */
 	allocsz += 4 * cache_line_size();
@@ -185,8 +184,6 @@ int csm_dp_ring_init(
 	ring->cons_tail = (csm_dp_ring_index_t *)aligned_ptr;
 	aligned_ptr += cache_line_size();
 	ring->element = elem_p = (csm_dp_ring_element_t *)aligned_ptr;
-	for (i = 0; i < ringsz; i++, elem_p++)
-		elem_p->element_ctrl = 1; /* not valid */
 	ring->size = ringsz;
 	*ring->prod_head = *ring->prod_tail = *ring->cons_head =
 						*ring->cons_tail = 0;
@@ -225,9 +222,9 @@ int csm_dp_ring_get_cfg(struct csm_dp_ring *ring, struct csm_dp_ring_cfg *cfg)
 /* Read from ring */
 int csm_dp_ring_read(
 	struct csm_dp_ring *ring,
-	csm_dp_ring_element_data_t *element_ptr, unsigned int *flag)
+	csm_dp_ring_element_data_t *element_ptr)
 {
-	register csm_dp_ring_index_t cons_head, cons_next, cons_tail;
+	register csm_dp_ring_index_t cons_head, cons_next;
 	register csm_dp_ring_index_t prod_tail, mask;
 	csm_dp_ring_element_data_t data;
 
@@ -257,63 +254,26 @@ again:
 
 	/* Read the ring */
 	data = ring->element[(cons_head & mask)].element_data;
-	if (flag)
-		*flag = ring->element[(cons_head & mask)].element_ctrl >> 1;
 	rmb();	/* Get current element */
-
-	/* After read, write to ring with bit0 on */
-
-	ring->element[(cons_head & mask)].element_ctrl = 1;
-	wmb();	/* Ensure element is written */
 
 	if (element_ptr)
 		*element_ptr = data;
 
-	/* Move the tail */
-	cons_tail = *ring->cons_tail;
-	rmb();	/* Get current cons_tail */
-
-	/* If tail is behind, let other producer to update it */
-	if (cons_head != cons_tail) {
-		ring->opstats.cons_tail_no_updt++;
-		return 0;
-	}
-
-repeat:
 	/* Potential two consumer is updating */
-	if (atomic_cmpxchg((atomic_t *)ring->cons_tail,
-			   cons_tail,
-			   cons_next) != cons_tail) {
-		/* the other producer wins */
+	while(atomic_cmpxchg((atomic_t *)ring->cons_tail,
+			   cons_head,
+			   cons_next) != cons_head)
 		ring->opstats.cons_tail_updt_backoff++;
-		return 0;
-	}
 
 	ring->opstats.cons_tail_updt++;
-	cons_tail = cons_next;
-	cons_next++;
 
-	/* This consumer win, read the cons_head */
-	cons_head = *ring->cons_head;
-	rmb();	/* Get current cons_head */
-
-	if (cons_tail == cons_head)
-		return 0;
-
-	/* The reader has not cleared the bit0 */
-	if (!(ring->element[(cons_tail & mask)].element_ctrl & 1)) {
-		ring->opstats.cons_tail_updt_stop++;
-		return 0;
-	}
-
-	goto repeat;
+	return 0;
 }
 
 /* Write to ring */
-int csm_dp_ring_write(struct csm_dp_ring *ring, csm_dp_ring_element_data_t data,
-		unsigned int flag)
+int csm_dp_ring_write(struct csm_dp_ring *ring, csm_dp_ring_element_data_t data)
 {
-	register csm_dp_ring_index_t prod_head, prod_next, prod_tail;
+	register csm_dp_ring_index_t prod_head, prod_next;
 	register csm_dp_ring_index_t cons_tail, mask;
 
 	if (unlikely(ring == NULL))
@@ -330,8 +290,12 @@ again:
 	rmb();	/* Get current prod_head and cons_tail */
 	prod_next = prod_head + 1;
 	if ((prod_next & mask) == (cons_tail & mask)) {
-		ring->opstats.write_full++;
-		return -EAGAIN;
+		rmb();
+		if (prod_head == *ring->prod_head && cons_tail == *ring->cons_tail) {
+			ring->opstats.write_full++;
+			return -EAGAIN;
+		}
+		goto again;
 	}
 	if (atomic_cmpxchg((atomic_t *)ring->prod_head,
 			   prod_head,
@@ -340,54 +304,20 @@ again:
 		goto again;
 	}
 
-#ifdef CONFIG_CSM_DP_TEST
-	if (data == TEST_RING_WRITE_MAGIC_VALUE)
-		data = prod_head << 1;
-#endif
-	/* Write to ring buffer with bit0 off */
 	ring->element[(prod_head & mask)].element_data = data;
-	ring->element[(prod_head & mask)].element_ctrl = flag << 1;
 	wmb();	/* Ensure element is written */
 
 	ring->opstats.write_ok++;
-	/* Move the tail */
-	prod_tail = *ring->prod_tail;
-	rmb();	/* Get current prod_tail */
 
-	/* If tail is behind, let other producer to update it */
-	if (prod_head != prod_tail) {
-		ring->opstats.prod_tail_no_updt++;
-		return 0;
-	}
-
-repeat:
 	/* Potential two producer is updating */
-	if (atomic_cmpxchg((atomic_t *)ring->prod_tail,
-			   prod_tail,
-			   prod_next) != prod_tail) {
-		/* the other producer wins */
+	while(atomic_cmpxchg((atomic_t *)ring->prod_tail,
+			   prod_head,
+			   prod_next) != prod_head)
 		ring->opstats.prod_tail_updt_backoff++;
-		return 0;
-	}
 
 	ring->opstats.prod_tail_updt++;
-	prod_tail = prod_next;
-	prod_next++;
 
-	/* This producer win, read the prod_head */
-	prod_head = *ring->prod_head;
-	rmb();	/* Get current prod_head */
-
-	if (prod_tail == prod_head)
-		return 0;
-
-	/* The writer has not written the data yet */
-	if (ring->element[(prod_tail & mask)].element_ctrl & 1) {
-		ring->opstats.prod_tail_updt_stop++;
-		return 0;
-	}
-
-	goto repeat;
+	return 0;
 }
 
 bool csm_dp_ring_is_empty(struct csm_dp_ring *ring)
@@ -547,8 +477,6 @@ static void csm_dp_mempool_init(struct csm_dp_mempool *mempool)
 			/* pointing to start of user data */
 			ring->element[buf_index].element_data =
 				element_data + mem->buf_overhead_sz;
-			/* entry valid */
-			ring->element[buf_index].element_ctrl = 0;
 			element_data += csm_dp_buf_true_size(mem);
 			buf_index++;
 		}
@@ -828,7 +756,7 @@ int csm_dp_mempool_put_buf(struct csm_dp_mempool *mempool, void *vaddr)
 #endif
 	offset += sizeof(struct csm_dp_buf_cntrl);
 
-	ret = csm_dp_ring_write(&mempool->ring, (csm_dp_ring_element_data_t)offset, 0);
+	ret = csm_dp_ring_write(&mempool->ring, (csm_dp_ring_element_data_t)offset);
 	if (ret)
 		mempool->stats.buf_put_err++;
 	else
@@ -843,7 +771,6 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 {
 	struct csm_dp_mem *mem;
 	csm_dp_ring_element_data_t val;
-	unsigned int flag;
 	void *ptr;
 #ifdef CSM_DP_BUFFER_FENCING
 	struct csm_dp_buf_cntrl *p;
@@ -852,7 +779,7 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 	if (unlikely(mempool == NULL))
 		return NULL;
 
-	if (csm_dp_ring_read(&mempool->ring, &val, &flag)) {
+	if (csm_dp_ring_read(&mempool->ring, &val)) {
 		mempool->stats.buf_get_err++;
 		return NULL;
 	}
