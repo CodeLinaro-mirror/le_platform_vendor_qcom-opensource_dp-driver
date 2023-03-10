@@ -12,5 +12,5 @@ then
 elif [ "$op" == "remove" ];
 then
 	rm -f $DRACUT_CONF_FILE
-	rmmod csm_dp
+	rmmod csm_dp > /dev/null 2>&1
 fi
