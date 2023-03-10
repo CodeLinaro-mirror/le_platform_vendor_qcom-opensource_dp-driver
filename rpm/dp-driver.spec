@@ -46,7 +46,7 @@ mkdir -p $RPM_BUILD_ROOT%{_includedir}/linux
 install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/include/uapi/linux/csm_dp_ioctl.h $RPM_BUILD_ROOT%{_includedir}/linux
 
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
-install -m 755 %{_sourcedir}/%{package_name}-%{version}/dp-driver/modules-load/dp-driver.conf %{buildroot}%{_sysconfdir}/modules-load.d/dp-driver.conf
+install -m 755 %{_sourcedir}/%{package_name}-%{version}/dp-driver/modules-load.d/dp-driver.conf %{buildroot}%{_sysconfdir}/modules-load.d/dp-driver.conf
 
 %clean
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
