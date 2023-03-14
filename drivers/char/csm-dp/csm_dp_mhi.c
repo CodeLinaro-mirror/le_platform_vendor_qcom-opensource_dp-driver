@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
@@ -21,6 +22,9 @@
 static struct csm_dp_drv *__pdrv;
 
 #define TX_POLL_INTERVAL_NS 500000 /* 0.5ms */
+static uint tx_poll_interval_ns = TX_POLL_INTERVAL_NS;
+module_param(tx_poll_interval_ns, uint, 0644);
+MODULE_PARM_DESC(tx_poll_interval_ns, " Tx poll interval in nanosec, default 500000");
 
 /*
  * Dump a packet.
@@ -371,7 +375,7 @@ enum hrtimer_restart csm_dp_mhi_poll_timer_handler(struct hrtimer *timer)
 
 	complete(&mhi->poll_comp);
 
-	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, TX_POLL_INTERVAL_NS));
+	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, tx_poll_interval_ns));
 
 	return HRTIMER_RESTART;
 }
@@ -474,7 +478,7 @@ static int csm_dp_mhi_probe(
 
 		hrtimer_init(&mhi->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		mhi->poll_timer.function = csm_dp_mhi_poll_timer_handler;
-		hrtimer_start(&mhi->poll_timer, ktime_set(0, TX_POLL_INTERVAL_NS), HRTIMER_MODE_REL);
+		hrtimer_start(&mhi->poll_timer, ktime_set(0, tx_poll_interval_ns), HRTIMER_MODE_REL);
 	}
 
 	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
