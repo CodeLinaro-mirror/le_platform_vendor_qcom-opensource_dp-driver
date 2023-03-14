@@ -20,11 +20,7 @@
 
 static struct csm_dp_drv *__pdrv;
 
-/* MHI/PCIe max rate is ~300 packets in 1ms (measured empirically).
- * Tx poll interval, together with poll budget must be faster than that.
- */
-#define TX_POLL_INTERVAL_NS 1000000 /* 1ms */
-#define MHI_POLL_BUDGET (CSM_DP_NAPI_WEIGHT * 8)
+#define TX_POLL_INTERVAL_NS 500000 /* 0.5ms */
 
 /*
  * Dump a packet.
@@ -359,9 +355,11 @@ static int csm_dp_mhi_tx_poll_thread(void *data)
 
 	while (!kthread_should_stop()) {
 		wait_for_completion(&pdev->mhi_data_dev.poll_comp);
-		ret = mhi_poll(mhi_dev, MHI_POLL_BUDGET, DMA_TO_DEVICE);
-		if (ret < 0)
-			pr_err_ratelimited("Error Tx polling ret:%d\n", ret);
+		do {
+			ret = mhi_poll(mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
+			if (ret < 0)
+				pr_err_ratelimited("Error Tx polling ret:%d\n", ret);
+		} while (ret == CSM_DP_NAPI_WEIGHT);
 	}
 
 	return 0;
