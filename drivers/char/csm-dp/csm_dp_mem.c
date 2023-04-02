@@ -241,8 +241,12 @@ again:
 	prod_tail = *ring->prod_tail;
 	rmb();	/* Get current cons_head and prod_tail */
 	if ((cons_head & mask) == (prod_tail & mask)) {
-		atomic_inc(&ring->opstats.read_empty);
-		return -EAGAIN;
+		rmb();
+		if (cons_head == *ring->cons_head && prod_tail == *ring->prod_tail) {
+			atomic_inc(&ring->opstats.read_empty);
+			return -EAGAIN;
+		}
+		goto again;
 	}
 	cons_next = cons_head + 1;
 	if (atomic_cmpxchg((atomic_t *)ring->cons_head,
