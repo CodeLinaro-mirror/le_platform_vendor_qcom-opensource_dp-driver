@@ -903,16 +903,19 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 
 void csm_dp_cdev_cleanup(struct csm_dp_drv *pdrv)
 {
+	int i;
+
 	CSM_DP_INFO("%s: start\n", __func__);
 
 	if (!pdrv->dev_class)
 		return;
 
+	for (i = 0; i < CSM_DP_MAX_NUM_DEVS; i++)
+		csm_dp_cdev_del(&pdrv->dp_devs[i]);
+
 	unregister_chrdev_region(pdrv->devno, CSM_DP_MAX_NUM_DEVS);
 	class_destroy(pdrv->dev_class);
 	pdrv->dev_class = NULL;
-
-	// TODO: cleanup cdevs
 
 	CSM_DP_INFO("%s: end\n", __func__);
 }
@@ -976,13 +979,13 @@ void csm_dp_cdev_del(struct csm_dp_dev *pdev)
 	struct csm_dp_drv *pdrv = pdev->pdrv;
 
 	mutex_lock(&pdev->cdev_lock);
-	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
-
 	if (!pdev->cdev_inited) {
 		mutex_unlock(&pdev->cdev_lock);
 		return;
 	}
 	pdev->cdev_inited = false;
+
+	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
 
 	device_destroy(pdrv->dev_class, pdev->cdev.dev);
 	cdev_del(&pdev->cdev);

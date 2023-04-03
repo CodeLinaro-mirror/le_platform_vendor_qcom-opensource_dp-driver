@@ -536,11 +536,6 @@ static int __init csm_dp_module_init(void)
 {
 	pr_info("csm_dp_module_init\n");
 
-
-	/* v1 HW doesn't support channel reset - prevent rmmod */
-	if (!try_module_get(THIS_MODULE))
-		return -ENODEV;
-
 	return csm_dp_probe();
 }
 module_init(csm_dp_module_init);
