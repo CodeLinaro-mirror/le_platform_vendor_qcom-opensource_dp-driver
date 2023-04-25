@@ -650,9 +650,7 @@ struct csm_dp_mempool *csm_dp_mempool_alloc(
 	mutex_lock(&pdev->mempool_lock);
 	mempool = pdev->mempool[type];
 	if (mempool) {
-		if (!csm_dp_mem_type_is_ul(type) &&
-			(buf_sz > mempool->mem.buf_sz ||
-				buf_cnt > mempool->mem.buf_cnt)) {
+		if (!csm_dp_mem_type_is_ul(type)) {
 			CSM_DP_ERROR(
 				"%s: can't use existing mempool, type=%u\n",
 				__func__, type);
