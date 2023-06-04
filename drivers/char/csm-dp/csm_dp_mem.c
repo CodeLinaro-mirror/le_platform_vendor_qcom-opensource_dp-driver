@@ -70,6 +70,22 @@ static inline void __free_ring(struct csm_dp_mem_loc *loc)
 	}
 }
 
+static struct page *alloc_zeroed_pages(unsigned int gfp_mask, unsigned int order)
+{
+	int i;
+	struct page *page = alloc_pages(gfp_mask, order);
+	void *page_addr;
+
+	if (!page)
+		return NULL;
+
+	page_addr = page_address(page);
+	for (i = 0; i < 1 << order; i++)
+		clear_page(page_addr + i * PAGE_SIZE);
+
+	return page;
+}
+
 static inline int __buf_mem_alloc(size_t size,
 			      unsigned int mmap_cookie,
 			      struct csm_dp_mem_loc *loc)
@@ -88,7 +104,7 @@ static inline int __buf_mem_alloc(size_t size,
 		order = get_order(len);
 		if (i == loc->num_cluster - 1)
 			loc->last_cl_order = order;
-		page = alloc_pages(GFP_KERNEL, order);
+		page = alloc_zeroed_pages(GFP_KERNEL, order);
 		if (!page)
 			goto error;
 		loc->page[i] = page;
