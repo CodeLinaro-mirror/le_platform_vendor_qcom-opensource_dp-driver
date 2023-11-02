@@ -40,7 +40,7 @@ struct csm_dp_mhi {
 	atomic_t mhi_dev_refcnt;
 	struct csm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
-	spinlock_t tx_lock;
+	struct mutex tx_mutex;
 	struct completion poll_comp;
 	struct hrtimer poll_timer;
 	struct task_struct *tx_poll_thread;

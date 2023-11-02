@@ -449,7 +449,7 @@ static int csm_dp_mhi_probe(
 	mhi->mhi_dev_destroyed = false;
 	atomic_set(&mhi->mhi_dev_refcnt, 0);
 	spin_lock_init(&mhi->rx_lock);
-	spin_lock_init(&mhi->tx_lock);
+	mutex_init(&mhi->tx_mutex);
 	mhi->rx_head_buf_cntrl = NULL;
 	mhi->rx_tail_buf_cntrl = NULL;
 

@@ -244,7 +244,7 @@ int csm_dp_tx(
 		return -EIO;
 	}
 
-	spin_lock_bh(&mhi->tx_lock);
+	mutex_lock(&mhi->tx_mutex);
 	to_send = 0;
 	for (n = 0, to_send = iov_nr; to_send > 0; ) {
 		if (to_send > CSM_DP_MAX_IOV_SIZE)
@@ -293,7 +293,7 @@ int csm_dp_tx(
 		pdev->stats.tx_cnt += (iov_nr - to_send);
 	else if (!to_send)
 		pdev->stats.tx_cnt++;
-	spin_unlock_bh(&mhi->tx_lock);
+	mutex_unlock(&mhi->tx_mutex);
 	atomic_dec(&mhi->mhi_dev_refcnt);
 	return ret;
 }
