@@ -15,7 +15,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/local_mhi.h>
-#include <linux/kthread.h>
 
 #define CSM_DP_MHI_NAME	"csm-l1rf-mhi"
 
@@ -41,9 +40,6 @@ struct csm_dp_mhi {
 	struct csm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	struct mutex tx_mutex;
-	struct completion poll_comp;
-	struct hrtimer poll_timer;
-	struct task_struct *tx_poll_thread;
 	/*
 	 * the following are for needed storage
 	 * for mhi_queue_n_transfer.
@@ -79,5 +75,7 @@ static inline bool csm_dp_mhi_is_ready(struct csm_dp_mhi *mhi)
 {
 	return mhi->mhi_dev && !mhi->mhi_dev_destroyed;
 }
+
+void csm_dp_mhi_tx_poll(struct csm_dp_mhi *mhi);
 
 #endif /* __CSM_DP_MHI_H__ */
