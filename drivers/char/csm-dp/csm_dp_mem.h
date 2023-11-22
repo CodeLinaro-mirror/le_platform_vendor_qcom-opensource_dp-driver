@@ -130,12 +130,6 @@ static inline void __csm_dp_mempool_hold(struct csm_dp_mempool *mempool)
 	atomic_inc(&mempool->ref);
 }
 
-static inline void csm_dp_mempool_put(struct csm_dp_mempool *mempool)
-{
-	if (mempool && atomic_dec_and_test(&mempool->ref))
-		csm_dp_mempool_free(mempool);
-}
-
 int csm_dp_ring_init(
 	struct csm_dp_ring *ring,
 	unsigned int ringsz,

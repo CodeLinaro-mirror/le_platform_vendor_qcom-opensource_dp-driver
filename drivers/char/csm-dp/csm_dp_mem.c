@@ -15,8 +15,6 @@
 #include "csm_dp.h"
 #include "csm_dp_mem.h"
 
-#define CSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
-
 static inline struct csm_dp_mempool *csm_dp_mem_to_mempool(
 	struct csm_dp_mem *mem)
 {
