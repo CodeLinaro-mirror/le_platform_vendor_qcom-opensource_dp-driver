@@ -398,24 +398,20 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 	struct csm_dp_dev *pdev = mempool->dp_dev;
 	int i;
 	unsigned int size;
-	struct device *mhi_cntrl_dev = get_mhi_cntrl_dev(pdev);
-
-	if (!mhi_cntrl_dev)
-		return;
 
 	spin_lock(&mempool->lock);
-	if (mem->loc.dma_mapped) {
+	if (mem->loc.dma_mapped && mempool->dev) {
 		size = mem->loc.size;
 		for (i = 0; i < mem->loc.num_cluster; i++) {
 			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
-					mhi_cntrl_dev,
+					mempool->dev,
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
 			} else {
 				dma_unmap_single(
-					mhi_cntrl_dev,
+					mempool->dev,
 					mem->loc.cluster_dma_addr[i],
 					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
@@ -428,6 +424,8 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 
 	__buf_mem_free(&mem->loc);
 	memset(mem, 0, sizeof(*mem));
+
+	mempool->dev = NULL;
 
 	put_mhi_cntrl_dev(pdev);
 }
@@ -628,6 +626,7 @@ int csm_dp_mempool_dma_map(
 	}
 	mpool->mem.loc.dma_mapped = true;
 	mpool->mem.loc.direction = direction;
+	mpool->dev = dev;
 	return 0;
 error:
 	for (k = 0; k < i - 1; k++) {

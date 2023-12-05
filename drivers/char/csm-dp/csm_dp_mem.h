@@ -93,6 +93,7 @@ struct csm_dp_mempool {
 	atomic_t out_xmit;
 	struct csm_dp_mempool_stats stats;
 	spinlock_t lock;
+	struct device *dev;	/* device for iommu ops */
 };
 
 struct csm_dp_mempool *csm_dp_mempool_alloc(
