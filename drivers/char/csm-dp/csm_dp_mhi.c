@@ -439,6 +439,12 @@ static int csm_dp_mhi_probe(
 
 	dev_set_drvdata(&mhi_dev->dev, pdev);
 
+	ret = mhi_prepare_for_transfer(mhi_dev, 0);
+	if (ret) {
+		CSM_DP_ERROR("%s: mhi_prepare_for_transfer failed\n", __func__);
+		goto err;
+	}
+
 	mhi->mhi_dev = mhi_dev;
 	mhi->mhi_dev_destroyed = false;
 	atomic_set(&mhi->mhi_dev_refcnt, 0);
@@ -446,12 +452,6 @@ static int csm_dp_mhi_probe(
 	mutex_init(&mhi->tx_mutex);
 	mhi->rx_head_buf_cntrl = NULL;
 	mhi->rx_tail_buf_cntrl = NULL;
-
-	ret = mhi_prepare_for_transfer(mhi_dev, 0);
-	if (ret) {
-		CSM_DP_ERROR("%s: mhi_prepare_for_transfer failed\n", __func__);
-		goto err;
-	}
 
 	CSM_DP_DEBUG("%s: csm_dp_mhi_rx_replenish\n", __func__);
 	if (mempool) {
