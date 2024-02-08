@@ -116,6 +116,7 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 		while (*p)
 			p = &((*p)->next_packet);
 
+		buf_cntrl->state = CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP;
 		*p = buf_cntrl;
 
 		return;
