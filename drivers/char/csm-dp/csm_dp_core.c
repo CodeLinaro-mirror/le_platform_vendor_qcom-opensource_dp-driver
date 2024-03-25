@@ -295,6 +295,10 @@ int csm_dp_tx(
 	else if (!to_send)
 		pdev->stats.tx_cnt++;
 	mutex_unlock(&mhi->tx_mutex);
+
+	if (ch == CSM_DP_CH_DATA)
+		csm_dp_mhi_tx_poll(mhi);
+
 	atomic_dec(&mhi->mhi_dev_refcnt);
 	return ret;
 }

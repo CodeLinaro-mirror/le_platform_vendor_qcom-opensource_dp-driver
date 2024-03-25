@@ -350,34 +350,15 @@ int csm_dp_mhi_rx_replenish(struct csm_dp_mhi *mhi)
 	return ret;
 }
 
-/* This is Tx polling thread - polling for Tx completions */
-static int csm_dp_mhi_tx_poll_thread(void *data)
+void csm_dp_mhi_tx_poll(struct csm_dp_mhi* mhi)
 {
-	struct mhi_device *mhi_dev = data;
-	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
-	int ret;
+    int n;
 
-	while (!kthread_should_stop()) {
-		wait_for_completion(&pdev->mhi_data_dev.poll_comp);
-		do {
-			ret = mhi_poll(mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
-			if (ret < 0)
-				pr_err_ratelimited("Error Tx polling ret:%d\n", ret);
-		} while (ret == CSM_DP_NAPI_WEIGHT);
-	}
-
-	return 0;
-}
-
-enum hrtimer_restart csm_dp_mhi_poll_timer_handler(struct hrtimer *timer)
-{
-	struct csm_dp_mhi *mhi = container_of(timer, struct csm_dp_mhi, poll_timer);
-
-	complete(&mhi->poll_comp);
-
-	hrtimer_forward_now(&mhi->poll_timer, ktime_set(0, tx_poll_interval_ns));
-
-	return HRTIMER_RESTART;
+    do {
+        n = mhi_poll(mhi->mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
+        if (n < 0)
+            pr_err_ratelimited("Error Tx polling n:%d\n", n);
+    } while (n == CSM_DP_NAPI_WEIGHT);
 }
 
 static int csm_dp_mhi_probe(
@@ -468,19 +449,6 @@ static int csm_dp_mhi_probe(
 		}
 	}
 
-	if (id->driver_data == CSM_DP_CH_DATA) {
-		/* Data channel specific initialization - Tx and Rx polling */
-		init_completion(&mhi->poll_comp);
-		mhi->tx_poll_thread = kthread_run(csm_dp_mhi_tx_poll_thread, mhi_dev,
-						  "csm_dp_mhi_tx_poll");
-		if (IS_ERR_OR_NULL(mhi->tx_poll_thread))
-			CSM_DP_WARN("%s: failed to start tx poll thread\n", __func__);
-
-		hrtimer_init(&mhi->poll_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-		mhi->poll_timer.function = csm_dp_mhi_poll_timer_handler;
-		hrtimer_start(&mhi->poll_timer, ktime_set(0, tx_poll_interval_ns), HRTIMER_MODE_REL);
-	}
-
 	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
 	return 0;
 
@@ -503,8 +471,6 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 		break;
 	case CSM_DP_CH_DATA:
 		mhi = &pdev->mhi_data_dev;
-		kthread_stop(mhi->tx_poll_thread);
-		hrtimer_cancel(&mhi->poll_timer);
 		break;
 	default:
 		CSM_DP_ERROR("%s: unexpected driver_data %ld\n", __func__, mhi_dev->id->driver_data);
