@@ -180,6 +180,7 @@ int csm_dp_tx(
 int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr);
 void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsigned int length);
 int csm_dp_get_stats(struct csm_dp_dev *pdev, struct csm_dp_ioctl_getstats *stats);
+void csm_dp_mempool_put(struct csm_dp_mempool *mempool);
 
 void csm_dp_hex_dump(unsigned char *buf, unsigned int len);
 

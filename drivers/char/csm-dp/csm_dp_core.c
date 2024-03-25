@@ -18,6 +18,8 @@
 #include "csm_dp.h"
 
 #define DEFAULT_RX_QUEUE_SIZE 1024
+#define CSM_DP_MEMPOOL_PUT_SLEEP 10
+#define CSM_DP_MEMPOOL_PUT_ITER 2
 
 static struct csm_dp_drv *csm_dp_pdrv;
 
@@ -87,6 +89,24 @@ static void csm_dp_rxqueue_cleanup(struct csm_dp_rxqueue *rxq)
 		csm_dp_ring_cleanup(rxq->ring);
 		kfree(rxq->ring);
 		rxq->ring = NULL;
+	}
+}
+
+void csm_dp_mempool_put(struct csm_dp_mempool *mempool)
+{
+	if (mempool && atomic_dec_and_test(&mempool->ref)) {
+		struct csm_dp_mhi *mhi = &mempool->dp_dev->mhi_data_dev;
+
+		// wait for any pending mempool buffers on DATA channel
+		if (csm_dp_mhi_is_ready(mhi)) {
+			int counter = CSM_DP_MEMPOOL_PUT_ITER;
+			while (counter-- && atomic_read(&mempool->out_xmit)) {
+				csm_dp_mhi_tx_poll(mhi);
+				msleep(CSM_DP_MEMPOOL_PUT_SLEEP);
+			}
+		}
+
+		csm_dp_mempool_free(mempool);
 	}
 }
 
