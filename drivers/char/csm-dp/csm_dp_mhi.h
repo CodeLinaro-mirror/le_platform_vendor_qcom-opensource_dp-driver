@@ -30,16 +30,20 @@ struct csm_dp_mhi_stats {
 
 	unsigned long rx_replenish;
 	unsigned long rx_replenish_err;
+	unsigned long ch_err_cnt;
 };
 
 /* represents MHI channel pair - Tx and Rx */
 struct csm_dp_mhi {
 	struct mhi_device *mhi_dev;
 	bool mhi_dev_destroyed;
+	bool mhi_dev_suspended;
 	atomic_t mhi_dev_refcnt;
 	struct csm_dp_mhi_stats stats;
 	spinlock_t rx_lock;
 	struct mutex tx_mutex;
+	struct workqueue_struct *mhi_dev_workqueue;
+	struct work_struct alloc_work;
 	/*
 	 * the following are for needed storage
 	 * for mhi_queue_n_transfer.
@@ -73,7 +77,7 @@ static inline int csm_dp_mhi_n_tx(struct csm_dp_mhi *mhi,
 
 static inline bool csm_dp_mhi_is_ready(struct csm_dp_mhi *mhi)
 {
-	return mhi->mhi_dev && !mhi->mhi_dev_destroyed;
+	return mhi->mhi_dev && !mhi->mhi_dev_destroyed && !mhi->mhi_dev_suspended;
 }
 
 void csm_dp_mhi_tx_poll(struct csm_dp_mhi *mhi);

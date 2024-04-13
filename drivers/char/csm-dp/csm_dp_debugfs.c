@@ -363,6 +363,86 @@ static int debugfs_mem_config_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_mem_config, debugfs_mem_config_show, NULL);
 
+static int debugfs_mem_buffer_state_show(struct seq_file *s, void *unused)
+{
+	int i, j;
+	int k_free = 0;
+	int k_alloc_dma = 0;
+	int k_recv_msgq_app = 0;
+	int k_xmit_dma = 0;
+	int k_xmit_dma_comp = 0;
+	int u_free = 0;
+	int u_alloc = 0;
+	int u_recv = 0;
+	char *cl_start;
+	unsigned int cl_buf_cnt;
+	struct csm_dp_buf_cntrl *p;
+
+	struct csm_dp_mempool *mempool =
+		*((struct csm_dp_mempool **)s->private);
+
+	if (mempool) {
+		struct csm_dp_mem *mem = &mempool->mem;
+
+		if (!csm_dp_mem_type_is_valid(mempool->type))
+			return 0;
+
+		for (j = 0; j < mem->loc.num_cluster; j++) {
+			cl_start = mem->loc.cluster_kernel_addr[j];
+			if (j == mem->loc.num_cluster - 1)
+				cl_buf_cnt = mem->buf_cnt -
+					(mem->loc.buf_per_cluster * j);
+			else
+				cl_buf_cnt = mem->loc.buf_per_cluster;
+			for (i = 0; i < cl_buf_cnt; i++) {
+				p = (struct csm_dp_buf_cntrl *) (cl_start +
+					(i * csm_dp_buf_true_size(mem)));
+
+				if(!p)
+					break;
+				if(p->state == CSM_DP_BUF_STATE_KERNEL_FREE)
+					k_free++;
+				if(p->state == CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA)
+					k_alloc_dma++;
+				if(p->state == CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP)
+					k_recv_msgq_app++;
+				if(p->state == CSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
+					k_xmit_dma++;
+				if(p->state == CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP)
+					k_xmit_dma_comp++;
+				if(p->state == CSM_DP_BUF_STATE_USER_FREE)
+					u_free++;
+				if(p->state == CSM_DP_BUF_STATE_USER_ALLOC)
+					u_alloc++;
+				if(p->state == CSM_DP_BUF_STATE_USER_RECV)
+					u_recv++;
+			}
+		}
+
+		seq_puts(s, "MemoryBufferState:\n");
+		seq_printf(s, "MemoryType:	%s\n", csm_dp_mem_type_to_str(mempool->type));
+		seq_printf(s, "   KERNEL_FREE:     %d\n",
+			   k_free);
+		seq_printf(s, "   KERNEL_ALLOC_RECV_DMA:  %d\n",
+			   k_alloc_dma);
+		seq_printf(s, "   KERNEL_RECVCMP_MSGQ_TO_APP:  %d\n",
+			   k_recv_msgq_app);
+		seq_printf(s, "   KERNEL_XMIT_DMA:     %d\n",
+			   k_xmit_dma);
+		seq_printf(s, "   KERNEL_XMIT_DMA_COMP:  %d\n",
+			   k_xmit_dma_comp);
+		seq_printf(s, "   USER_FREE:  %d\n",
+			   u_free);
+		seq_printf(s, "   USER_ALLOC:  %d\n",
+			   u_alloc);
+		seq_printf(s, "   USER_RECV:  %d\n",
+			   u_recv);
+
+	}
+
+	return 0;
+}
+DEFINE_DEBUGFS_OPS(debugfs_mem_buffer_state, debugfs_mem_buffer_state_show, NULL);
 static int debugfs_ring_config_read(struct seq_file *s, void *unused)
 {
 	struct csm_dp_mempool *mempool =
@@ -562,6 +642,49 @@ static int debugfs_mempool_info_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_mempool_info, debugfs_mempool_info_show, NULL);
 
+static int debugfs_start_recovery_dev_read(struct seq_file *s, void *unused)
+{
+	struct csm_dp_mhi *mhi = (struct csm_dp_mhi *)s->private;
+	if (mhi) {
+		seq_printf(s, "mhi_dev_suspended: %u\n", mhi->mhi_dev_suspended==true?1:0);
+	}
+
+	return 0;
+}
+static ssize_t debugfs_start_recovery_dev_write(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct csm_dp_mhi *mhi = ((struct csm_dp_mhi *)
+		(((struct seq_file *)fp->private_data)->private));
+	int retry = 10;
+
+	if (mhi->mhi_dev_suspended) {
+		printk(KERN_INFO "%s: MHI channel is already suspended\n", __func__);
+		return count;
+	}
+
+	/* Start the recovery operation */
+	mhi->mhi_dev_suspended = true;
+	printk(KERN_INFO "%s: Recovering MHI channel..\n", __func__);
+	/* Allocating work to queue */
+	queue_work(mhi->mhi_dev_workqueue, &mhi->alloc_work);
+
+	while (mhi->mhi_dev_suspended && retry) {
+		msleep(50);
+		retry--;
+	}
+
+	if (!mhi->mhi_dev_suspended)
+		printk(KERN_INFO "%s: MHI channel recovery is complete\n", __func__);
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(debugfs_start_recovery_control_dev, debugfs_start_recovery_dev_read, debugfs_start_recovery_dev_write);
+DEFINE_DEBUGFS_OPS(debugfs_start_recovery_data_dev, debugfs_start_recovery_dev_read,  debugfs_start_recovery_dev_write);
+
 static int debugfs_mhi_show(struct seq_file *s, void *unused)
 {
 	struct csm_dp_mhi *mhi = (struct csm_dp_mhi *)s->private;
@@ -579,6 +702,8 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 		   mhi->stats.rx_replenish);
 	seq_printf(s, "    RX_REPLENISH_ERR:   %lu\n",
 		   mhi->stats.rx_replenish_err);
+	seq_printf(s, "    CHANNEL_ERR_COUNT:   %lu\n",
+		   mhi->stats.ch_err_cnt);
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_mhi, debugfs_mhi_show, NULL);
@@ -761,6 +886,12 @@ static int debugfs_create_mem_dir(
 	if (!entry)
 		return -ENOMEM;
 
+	entry = debugfs_create_file("buffer_state", 0444, dentry,
+				     mempool,
+				     &debugfs_mem_buffer_state_ops);
+	if (!entry)
+		return -ENOMEM;
+
 	return 0;
 }
 
@@ -857,6 +988,16 @@ int csm_dp_debugfs_init(struct csm_dp_drv *drv)
 
 		entry = debugfs_create_file("status", 0444, dp_dev_entry, pdev,
 							&debugfs_dev_status_ops);
+		if (!entry)
+			goto err;
+
+		entry = debugfs_create_file("start_recovery_mhi_control_dev", 0644, dp_dev_entry,
+					    &pdev->mhi_control_dev, &debugfs_start_recovery_control_dev_ops);
+		if (!entry)
+			goto err;
+
+		entry = debugfs_create_file("start_recovery_mhi_data_dev", 0644, dp_dev_entry,
+					    &pdev->mhi_data_dev, &debugfs_start_recovery_data_dev_ops);
 		if (!entry)
 			goto err;
 

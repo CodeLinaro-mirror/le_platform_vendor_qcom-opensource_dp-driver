@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/mod_devicetable.h>
+#include <linux/delay.h>
 
 #include "csm_dp.h"
 #include "csm_dp_mhi.h"
@@ -195,12 +196,20 @@ static void __mhi_ul_xfer_cb(
 	struct csm_dp_mempool *mempool;
 	struct csm_dp_buf_cntrl *buf_cntrl;
 
-	CSM_DP_DEBUG("%s: (TX complete) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
-		     __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
-		     result->bytes_xferd, result->transaction_status);
 
-	csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
-	mhi->stats.tx_acked++;
+	if ((result->transaction_status == -ENOTCONN) || (mhi->mhi_dev_suspended)) {
+		CSM_DP_DEBUG("%s: (TX Dropped) ch %s bus %d VF %d addr=%p bytes=%lu status=%d mhi->mhi_dev_suspended %d\n",
+			  __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
+			  result->bytes_xferd, result->transaction_status, mhi->mhi_dev_suspended == true?1:0);
+
+	} else {
+		CSM_DP_DEBUG("%s: (TX complete) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
+			__func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
+			result->bytes_xferd, result->transaction_status);
+
+		csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
+		mhi->stats.tx_acked++;
+	}
 
 	buf_cntrl = addr - sizeof(struct csm_dp_buf_cntrl);
 	while (buf_cntrl) {
@@ -272,11 +281,17 @@ static void __mhi_dl_xfer_cb(
 		return;
 	}
 
-	CSM_DP_DEBUG("%s: (RX) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
-		  __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
-		  result->bytes_xferd, result->transaction_status);
+	if ((result->transaction_status == -ENOTCONN) || (mhi->mhi_dev_suspended)) {
+		CSM_DP_DEBUG("%s: (RX) ch %s bus %d VF %d addr=%p bytes=%lu status=%d mhi->mhi_dev_suspended %d\n",
+			  __func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
+			  result->bytes_xferd, result->transaction_status, mhi->mhi_dev_suspended == true?1:0);
+	} else {
+		CSM_DP_DEBUG("%s: (RX) ch %s bus %d VF %d addr=%p bytes=%lu status=%d\n",
+			__func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num, result->buf_addr,
+			result->bytes_xferd, result->transaction_status);
 
-	csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
+		csm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
+	}
 
 	if (result->transaction_status == -EOVERFLOW) {
 		CSM_DP_DEBUG("%s: overflow event ignored\n", __func__);
@@ -324,16 +339,77 @@ static void __mhi_dl_xfer_cb(
 	CSM_DP_ERROR("couldn't find end of packet, buf_addr 0x%p", result->buf_addr);
 }
 
+/* worker function to reset (unprepare and prepare) MHI channel when channel goes into error state */
+static void csm_dp_mhi_alloc_work(struct work_struct *work)
+{
+	struct csm_dp_mhi *mhi;
+	const int sleep_us =  500;
+	int retry = 10;
+	unsigned int bus_num, vf_num;
+	int ret;
+
+	mhi = container_of(work, struct csm_dp_mhi, alloc_work);
+
+	if (!mhi || !mhi->mhi_dev)
+		return;
+
+	bus_num = mhi_get_device_bus_number(mhi->mhi_dev->mhi_cntrl);
+	vf_num = mhi_get_device_instance_id(mhi->mhi_dev->mhi_cntrl);
+	CSM_DP_INFO("%s: bus %d VF %d ch %s\n", __func__, bus_num, vf_num, ch_name(mhi->mhi_dev->id->driver_data));
+
+	if (!mhi->mhi_dev_suspended) {
+		CSM_DP_ERROR("%s: mhi is not suspended\n", __func__);
+		return;
+	}
+
+	mhi->stats.ch_err_cnt++;
+	do {
+		if (atomic_read(&mhi->mhi_dev_refcnt) == 0) {
+			break;
+		} else {
+			usleep_range(sleep_us, 2*sleep_us);
+			retry--;
+		}
+	} while (retry);
+
+	mhi_unprepare_from_transfer(mhi->mhi_dev);
+	CSM_DP_INFO("%s: bus %d VF %d ch %s mhi_unprepare_from_transfer completed\n", __func__, bus_num, vf_num, ch_name(mhi->mhi_dev->id->driver_data));
+
+	/* mhi_prepare_for_transfer is a blocking call that will return only after the mhi channel connection is restored */
+	ret = mhi_prepare_for_transfer(mhi->mhi_dev, 0);
+	if (ret) {
+		CSM_DP_ERROR("%s: mhi_prepare_for_transfer failed\n", __func__);
+		return;
+	}
+	CSM_DP_INFO("%s: bus %d VF %d ch %s mhi_prepare_for_transfer completed\n", __func__, bus_num, vf_num, ch_name(mhi->mhi_dev->id->driver_data));
+
+	ret = csm_dp_mhi_rx_replenish(mhi);
+	if (ret) {
+		CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed\n", __func__);
+		return;
+	}
+
+	mhi->mhi_dev_suspended = false;
+	CSM_DP_INFO("%s: bus %d VF %d ch %s mhi channel reset completed\n", __func__, bus_num, vf_num, ch_name(mhi->mhi_dev->id->driver_data));
+}
+
 static void __mhi_status_cb(struct mhi_device *mhi_dev, enum mhi_callback mhi_cb)
 {
-	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
+	struct csm_dp_dev *pdev;
+	struct csm_dp_mhi *mhi;
 
 	switch (mhi_cb) {
 	case MHI_CB_PENDING_DATA:
+		pdev = dev_get_drvdata(&mhi_dev->dev);
 		if (napi_schedule_prep(&pdev->napi)) {
 			__napi_schedule(&pdev->napi);
 			pdev->stats.rx_int++;
 		}
+		break;
+	case MHI_CB_CHANNEL_ERROR:
+		mhi = get_dp_mhi(mhi_dev);
+		mhi->mhi_dev_suspended = true;
+		queue_work(mhi->mhi_dev_workqueue, &mhi->alloc_work);
 		break;
 	default:
 		break;
@@ -426,8 +502,18 @@ static int csm_dp_mhi_probe(
 		goto err;
 	}
 
+	/* Creating workqueue */
+	mhi->mhi_dev_workqueue = alloc_workqueue("csm_dp_mhi_workqueue", WQ_UNBOUND|WQ_MEM_RECLAIM, 0);
+	if (!mhi->mhi_dev_workqueue) {
+		CSM_DP_ERROR("%s: Failed to allocate workqueue\n", __func__);
+		goto err;
+	}
+
+	INIT_WORK(&mhi->alloc_work, csm_dp_mhi_alloc_work);
+
 	mhi->mhi_dev = mhi_dev;
 	mhi->mhi_dev_destroyed = false;
+	mhi->mhi_dev_suspended = false;
 	atomic_set(&mhi->mhi_dev_refcnt, 0);
 	spin_lock_init(&mhi->rx_lock);
 	mutex_init(&mhi->tx_mutex);
@@ -477,6 +563,8 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 		return;
 	}
 
+	flush_work(&mhi->alloc_work);
+	destroy_workqueue(mhi->mhi_dev_workqueue);
 	mhi_unprepare_from_transfer(mhi_dev);
 
 	mhi->mhi_dev_destroyed = true;

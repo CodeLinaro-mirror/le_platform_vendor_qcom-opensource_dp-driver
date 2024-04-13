@@ -260,7 +260,7 @@ int csm_dp_tx(
 	atomic_inc(&mhi->mhi_dev_refcnt);
 	if (!csm_dp_mhi_is_ready(mhi)) {
 		atomic_dec(&mhi->mhi_dev_refcnt);
-		CSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
+		CSM_DP_DEBUG("%s: mhi is not ready!\n", __func__);
 		pdev->stats.tx_err++;
 		return -EIO;
 	}
