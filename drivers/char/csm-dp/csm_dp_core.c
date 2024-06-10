@@ -83,10 +83,15 @@ static int csm_dp_rxqueue_init(
 
 static void csm_dp_rxqueue_cleanup(struct csm_dp_rxqueue *rxq)
 {
+	unsigned long size;
+        struct csm_dp_dev *dev = container_of(rxq,
+                                           struct csm_dp_dev, rxq[rxq->type]);
 	if (rxq->inited) {
+		size = ((unsigned int)(1) << rxq->ring->loc.last_cl_order)*PAGE_SIZE;
 		rxq->inited = false;
 		wake_up(&rxq->wq);
 		csm_dp_ring_cleanup(rxq->ring);
+		dev->stats.mem_stats.rxq_ring_in_use[rxq->type] -= size;
 		kfree(rxq->ring);
 		rxq->ring = NULL;
 	}
@@ -214,6 +219,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 			CSM_DP_ERROR("%s: failed to init rxqueue!\n", __func__);
 			return ret;
 		}
+		pdev->stats.mem_stats.rxq_ring_in_use[type] += pdev->rxq[type].ring->loc.true_alloc_size;
 	}
 
 	return 0;
@@ -260,9 +266,10 @@ int csm_dp_tx(
 	atomic_inc(&mhi->mhi_dev_refcnt);
 	if (!csm_dp_mhi_is_ready(mhi)) {
 		atomic_dec(&mhi->mhi_dev_refcnt);
-		CSM_DP_DEBUG("%s: mhi is not ready!\n", __func__);
-		pdev->stats.tx_err++;
-		return -EIO;
+		if(pdev->stats.tx_drop % 1024 == 0)
+			CSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
+		pdev->stats.tx_drop++;
+		return -ENODEV;
 	}
 
 	mutex_lock(&mhi->tx_mutex);
@@ -331,8 +338,9 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 
 	atomic_inc(&pdev->mhi_data_dev.mhi_dev_refcnt);
 	if (!csm_dp_mhi_is_ready(&pdev->mhi_data_dev)) {
+		pdev->stats.rx_poll_ignore++;
 		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
-		return 0;
+		return -ENODEV;
 	}
 
 	/*
@@ -418,8 +426,9 @@ static int csm_dp_poll(struct napi_struct *napi, int budget)
 	pdev = container_of(napi, struct csm_dp_dev, napi);
 	atomic_inc(&pdev->mhi_control_dev.mhi_dev_refcnt);
 	if (!csm_dp_mhi_is_ready(&pdev->mhi_control_dev)) {
+		pdev->stats.rx_poll_ignore++;
 		atomic_dec(&pdev->mhi_control_dev.mhi_dev_refcnt);
-		return 0;
+		return -ENODEV;
 	}
 
 	rx_work = mhi_poll(pdev->mhi_control_dev.mhi_dev, budget, DMA_FROM_DEVICE);

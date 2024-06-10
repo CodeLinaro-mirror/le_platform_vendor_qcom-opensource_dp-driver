@@ -23,6 +23,14 @@ static inline struct csm_dp_mempool *csm_dp_mem_to_mempool(
 	return mempool;
 }
 
+static inline struct csm_dp_mempool *csm_dp_mem_loc_to_mempool(
+	struct csm_dp_mem_loc *loc)
+{
+	struct csm_dp_mem *mem = container_of(loc,
+					   struct csm_dp_mem, loc);
+	return csm_dp_mem_to_mempool(mem);
+}
+
 static inline void csm_dp_mem_loc_set(
 	struct csm_dp_mem_loc *loc,
 	size_t size,
@@ -55,6 +63,9 @@ static inline int __alloc_ring(
 		loc->page[0] = page;
 		loc->cluster_kernel_addr[0] = page_address(page);
 		csm_dp_mem_loc_set(loc, size, mmap_cookie);
+		loc->true_alloc_size += ((unsigned int)(1) << loc->last_cl_order)*PAGE_SIZE;
+		CSM_DP_INFO("%s: Allocated ring memory of size %lu\n",
+				__func__, loc->true_alloc_size);
 		return 0;
 	}
 	return -ENOMEM;
@@ -64,6 +75,8 @@ static inline void __free_ring(struct csm_dp_mem_loc *loc)
 {
 	if (loc && loc->page[0]) {
 		__free_pages(loc->page[0], loc->last_cl_order);
+		CSM_DP_INFO("%s: Free ring memory of size %lu\n",
+				__func__, ((unsigned int)(1) << loc->last_cl_order)*PAGE_SIZE);
 		memset(loc, 0, sizeof(*loc));
 	}
 }
@@ -93,6 +106,7 @@ static inline int __buf_mem_alloc(size_t size,
 	int i;
 	unsigned long rem = size;
 	unsigned long len;
+	struct csm_dp_mempool *mempool = csm_dp_mem_loc_to_mempool(loc);
 
 	for (i = 0; i < loc->num_cluster; i++) {
 		if (i == loc->num_cluster - 1)
@@ -108,8 +122,12 @@ static inline int __buf_mem_alloc(size_t size,
 		loc->page[i] = page;
 		loc->cluster_kernel_addr[i] = page_address(page);
 		rem -= len;
+		loc->true_alloc_size +=
+			(i == (loc->num_cluster - 1))?((unsigned int)(1) << order)*PAGE_SIZE:CSM_DP_MEMPOOL_CLUSTER_SIZE;
 	}
 	csm_dp_mem_loc_set(loc, size, mmap_cookie);
+	mempool->dp_dev->stats.mem_stats.mempool_mem_in_use[mempool->type] += loc->true_alloc_size;
+	CSM_DP_INFO("%s: Allocated Mempool %u of size %lu\n", __func__, mempool->type, loc->true_alloc_size);
 	return 0;
 error:
 	for (i = 0; i < loc->num_cluster; i++) {
@@ -120,6 +138,8 @@ error:
 				order = get_order(CSM_DP_MEMPOOL_CLUSTER_SIZE);
 			__free_pages(loc->page[i], order);
 			loc->page[i] = NULL;
+			loc->true_alloc_size -=
+				(i == (loc->num_cluster - 1))?((unsigned int)(1) << order)*PAGE_SIZE:CSM_DP_MEMPOOL_CLUSTER_SIZE;
 		}
 	}
 	loc->num_cluster = 0;
@@ -129,16 +149,23 @@ error:
 static inline void __buf_mem_free(struct csm_dp_mem_loc *loc)
 {
 	int i;
+	struct csm_dp_mempool *mempool;
+	unsigned long to_free = loc->true_alloc_size;
 	unsigned int order = get_order(CSM_DP_MEMPOOL_CLUSTER_SIZE);
 
 	if (loc) {
+		mempool = csm_dp_mem_loc_to_mempool(loc);
 		for (i = 0; i < loc->num_cluster; i++) {
 			if (loc->page[i]) {
 				if (i == loc->num_cluster - 1)
 					order = loc->last_cl_order;
 				__free_pages(loc->page[i], order);
+				loc->true_alloc_size -=
+					(i == (loc->num_cluster - 1))?((unsigned int)(1) << order)*PAGE_SIZE:CSM_DP_MEMPOOL_CLUSTER_SIZE;
 			}
 		}
+		mempool->dp_dev->stats.mem_stats.mempool_mem_in_use[mempool->type] -= (to_free - loc->true_alloc_size);
+		CSM_DP_INFO("%s: Free Mempool %u of size %lu\n", __func__, mempool->type, (to_free - loc->true_alloc_size));
 		memset(loc, 0, sizeof(*loc));
 	}
 }
@@ -395,7 +422,7 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 	struct csm_dp_mempool *mempool = csm_dp_mem_to_mempool(mem);
 	struct csm_dp_dev *pdev = mempool->dp_dev;
 	int i;
-	unsigned int size;
+	unsigned long size;
 
 	spin_lock(&mempool->lock);
 	if (mem->loc.dma_mapped && mempool->dev) {
@@ -407,15 +434,18 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
+				mempool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= size;
 			} else {
 				dma_unmap_single(
 					mempool->dev,
 					mem->loc.cluster_dma_addr[i],
 					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
+				mempool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 				size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 			}
 		}
+		CSM_DP_INFO("%s: DMA Unmap Mempool %u of size %lu\n", __func__, mempool->type, mem->loc.size);
 	}
 	mem->loc.dma_mapped = false;
 	spin_unlock(&mempool->lock);
@@ -536,7 +566,8 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 		CSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
 		goto cleanup_mem;
 	}
-
+	mempool->dp_dev->stats.mem_stats.mempool_ring_in_use[mempool->type] +=
+		mempool->ring.loc.true_alloc_size;
 	csm_dp_mempool_init(mempool);
 
 	CSM_DP_DEBUG("%s: mempool is created, type=%u bufsz=%u bufcnt=%u\n",
@@ -553,13 +584,16 @@ cleanup:
 
 static void csm_dp_mempool_release(struct csm_dp_mempool *mempool)
 {
+	unsigned long to_release;
 	if (mempool) {
 		enum csm_dp_mem_type type = mempool->type;
+		to_release = ((unsigned int)(1) << mempool->ring.loc.last_cl_order)*PAGE_SIZE;
 
 		mempool->signature = CSM_DP_MEMPOOL_SIG_BAD;
 		wmb();
 		csm_dp_mem_cleanup(&mempool->mem);
 		csm_dp_ring_cleanup(&mempool->ring);
+		mempool->dp_dev->stats.mem_stats.mempool_ring_in_use[mempool->type] -= to_release;
 		kfree(mempool);
 		CSM_DP_DEBUG("%s: mempool is freed, type=%u\n", __func__, type);
 	}
@@ -593,7 +627,7 @@ int csm_dp_mempool_dma_map(
 {
 	enum dma_data_direction direction;
 	int i, k;
-	unsigned int size;
+	unsigned long size;
 	struct csm_dp_mem_loc *loc;
 
 	loc = &mpool->mem.loc;
@@ -605,23 +639,26 @@ int csm_dp_mempool_dma_map(
 		direction = DMA_TO_DEVICE;
 	size = loc->size;
 	for (i = 0; i < loc->num_cluster; i++) {
-		if (i == loc->num_cluster - 1)
+		if (i == loc->num_cluster - 1) {
 			loc->cluster_dma_addr[i] =
 				dma_map_single(dev,
 					loc->cluster_kernel_addr[i],
 					size,
 					direction);
-		else {
+			mpool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mpool->type] += size;
+		} else {
 			loc->cluster_dma_addr[i] =
 				dma_map_single(dev,
 					loc->cluster_kernel_addr[i],
 					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					direction);
+			mpool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mpool->type] += CSM_DP_MEMPOOL_CLUSTER_SIZE;
 			size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 		}
 		if (dma_mapping_error(dev, loc->cluster_dma_addr[i]))
 			goto error;
 	}
+	CSM_DP_INFO("%s: DMA map Mempool %u of size %lu\n", __func__, mpool->type, loc->size);
 	mpool->mem.loc.dma_mapped = true;
 	mpool->mem.loc.direction = direction;
 	mpool->dev = dev;
@@ -696,6 +733,7 @@ void csm_dp_mempool_free(struct csm_dp_mempool *mempool)
 
 	if (!mempool)
 		return;
+	CSM_DP_INFO("%s: Free mempool type %d\n", __func__, mempool->type);
 	csm_dp_mempool_release_no_delay(mempool);
 	pdev->mempool[mempool->type] = NULL;
 	wmb();

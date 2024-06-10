@@ -746,14 +746,27 @@ static int debugfs_dev_status_show(struct seq_file *s, void *unused)
 {
 	struct csm_dp_dev *pdev = (struct csm_dp_dev *)s->private;
 	struct csm_dp_core_stats *stats = &pdev->stats;
+	int i;
 
 	seq_printf(s, "TX:             %lu\n", stats->tx_cnt);
 	seq_printf(s, "TX_ERR:         %lu\n", stats->tx_err);
+	seq_printf(s, "TX_DROP:        %lu\n", stats->tx_drop);
 	seq_printf(s, "RX:             %lu\n", stats->rx_cnt);
 	seq_printf(s, "RX_BADMSG:      %lu\n", stats->rx_badmsg);
 	seq_printf(s, "RX_DROP:        %lu\n", stats->rx_drop);
 	seq_printf(s, "RX_INT:         %lu\n", stats->rx_int);
 	seq_printf(s, "RX_BUDGET_OVF:  %lu\n", stats->rx_budget_overflow);
+	seq_printf(s, "RX_IGNORE:      %lu\n", stats->rx_poll_ignore);
+	for (i = 0; i < CSM_DP_MEM_TYPE_LAST; i++) {
+		seq_printf(s, "Mempool[%d]\n", i);
+		seq_printf(s, "MEM_POOL_IN_USE:	%lu\n", stats->mem_stats.mempool_mem_in_use[i]);
+		seq_printf(s, "MEM_DMA_MAPPED:	%lu\n", stats->mem_stats.mempool_mem_dma_mapped[i]);
+		seq_printf(s, "MEM_RING_IN_USE:	%lu\n", stats->mem_stats.mempool_ring_in_use[i]);
+	}
+	for (i = 0; i < CSM_DP_RX_TYPE_LAST; i++) {
+		seq_printf(s, "RXQ[%d]\n", i);
+		seq_printf(s, "MEM_RXQ_IN_USE:		%lu\n", stats->mem_stats.rxq_ring_in_use[i]);
+	}
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_dev_status, debugfs_dev_status_show, NULL);

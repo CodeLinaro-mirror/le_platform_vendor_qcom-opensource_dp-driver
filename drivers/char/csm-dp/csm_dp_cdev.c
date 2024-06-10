@@ -475,7 +475,7 @@ static void __mempool_mem_vma_open(struct vm_area_struct *vma)
 	struct csm_dp_mempool_vma *mempool_vma = vma->vm_private_data;
 	atomic_t *refcnt = &mempool_vma->refcnt[CSM_DP_MMAP_TYPE_MEM];
 
-	CSM_DP_DEBUG("%s: vma %p\n", __func__, vma);
+	CSM_DP_INFO("%s: vma %p\n", __func__, vma);
 
 	if (atomic_add_return(1, refcnt) == 1) {
 		struct csm_dp_mempool *mempool = *mempool_vma->pp_mempool;
@@ -491,7 +491,7 @@ static void __mempool_mem_vma_close(struct vm_area_struct *vma)
 	struct csm_dp_mempool_vma *mempool_vma = vma->vm_private_data;
 	atomic_t *refcnt = &mempool_vma->refcnt[CSM_DP_MMAP_TYPE_MEM];
 
-	CSM_DP_DEBUG("%s: vma %p\n", __func__, vma);
+	CSM_DP_INFO("%s: vma %p\n", __func__, vma);
 
 	if (atomic_dec_and_test(refcnt)) {
 		struct csm_dp_mempool *mempool = *mempool_vma->pp_mempool;

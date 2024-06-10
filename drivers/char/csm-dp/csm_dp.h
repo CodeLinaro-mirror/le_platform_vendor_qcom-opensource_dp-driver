@@ -120,15 +120,27 @@ struct csm_dp_cdev {
 	struct csm_dp_rxqueue_vma rxqueue_vma[CSM_DP_RX_TYPE_LAST];
 };
 
+struct csm_dp_core_mem_stats {
+	unsigned long mempool_mem_in_use[CSM_DP_MEM_TYPE_LAST];
+	unsigned long mempool_mem_dma_mapped[CSM_DP_MEM_TYPE_LAST];
+	unsigned long mempool_ring_in_use[CSM_DP_MEM_TYPE_LAST];
+	unsigned long rxq_ring_in_use[CSM_DP_RX_TYPE_LAST];
+};
+
 struct csm_dp_core_stats {
 	unsigned long tx_cnt;
 	unsigned long tx_err;
+	unsigned long tx_drop;
 
 	unsigned long rx_cnt;
 	unsigned long rx_badmsg;
 	unsigned long rx_drop;
 	unsigned long rx_int;
 	unsigned long rx_budget_overflow;
+	unsigned long rx_poll_ignore;
+	unsigned long rx_pending_pkts;
+
+	struct csm_dp_core_mem_stats mem_stats;
 };
 
 struct csm_dp_dev {

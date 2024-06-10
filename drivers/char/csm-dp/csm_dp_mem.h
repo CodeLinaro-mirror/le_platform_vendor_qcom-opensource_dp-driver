@@ -42,6 +42,7 @@ struct csm_dp_mem_loc {
 	enum dma_data_direction direction;
 	bool dma_mapped;
 	unsigned int buf_per_cluster;
+	unsigned long true_alloc_size;
 };
 
 struct csm_dp_mem {

@@ -517,7 +517,6 @@ static int csm_dp_mhi_probe(
 	INIT_WORK(&mhi->alloc_work, csm_dp_mhi_alloc_work);
 
 	mhi->mhi_dev = mhi_dev;
-	mhi->mhi_dev_destroyed = false;
 	mhi->mhi_dev_suspended = false;
 	atomic_set(&mhi->mhi_dev_refcnt, 0);
 	spin_lock_init(&mhi->rx_lock);
@@ -540,6 +539,7 @@ static int csm_dp_mhi_probe(
 		}
 	}
 
+	mhi->mhi_dev_destroyed = false;
 	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
 	return 0;
 
