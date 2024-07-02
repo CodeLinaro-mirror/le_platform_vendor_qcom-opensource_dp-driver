@@ -305,7 +305,7 @@ static void __mhi_dl_xfer_cb(
 
 	packet_start = mhi->rx_head_buf_cntrl;
 	packet_end = result->buf_addr - sizeof(struct csm_dp_buf_cntrl);
-	for (; mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl;
+	for (; ((mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl) || (mhi->rx_head_buf_cntrl == packet_end));
 	     mhi->rx_head_buf_cntrl = mhi->rx_head_buf_cntrl->next) {
 		buf_count++;
 		if (prev_buf_cntrl)
@@ -317,7 +317,8 @@ static void __mhi_dl_xfer_cb(
 		}
 
 		/* reached end of packet */
-		mhi->rx_head_buf_cntrl = packet_end->next;
+		if(mhi->rx_head_buf_cntrl != mhi->rx_tail_buf_cntrl)
+			mhi->rx_head_buf_cntrl = packet_end->next;
 		packet_start->buf_count = buf_count;
 		packet_end->next = NULL;
 		packet_end->next_buf_index = CSM_DP_INVALID_BUF_INDEX;
@@ -336,7 +337,9 @@ static void __mhi_dl_xfer_cb(
 		return;
 	}
 
-	CSM_DP_ERROR("couldn't find end of packet, buf_addr 0x%p", result->buf_addr);
+	CSM_DP_ERROR("couldn't find end of packet, buf_addr 0x%p rx_head_buf_cntrl 0x%p rx_tail_buf_cntrl 0x%p buf_count %d",
+			result->buf_addr, mhi->rx_head_buf_cntrl, mhi->rx_tail_buf_cntrl, buf_count);
+	mhi->rx_head_buf_cntrl = packet_start;
 }
 
 /* worker function to reset (unprepare and prepare) MHI channel when channel goes into error state */
@@ -382,6 +385,8 @@ static void csm_dp_mhi_alloc_work(struct work_struct *work)
 		return;
 	}
 	CSM_DP_INFO("%s: bus %d VF %d ch %s mhi_prepare_for_transfer completed\n", __func__, bus_num, vf_num, ch_name(mhi->mhi_dev->id->driver_data));
+	mhi->rx_head_buf_cntrl = NULL;
+	mhi->rx_tail_buf_cntrl = NULL;
 
 	ret = csm_dp_mhi_rx_replenish(mhi);
 	if (ret) {
