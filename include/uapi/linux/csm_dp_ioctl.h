@@ -19,8 +19,8 @@
 #include <sys/uio.h>
 #endif
 
-#define CSM_DP_MAX_IOV_SIZE	64
-#define CSM_DP_MAX_SG_IOV_SIZE	8
+#define CSM_DP_MAX_IOV_SIZE	128
+#define CSM_DP_MAX_SG_IOV_SIZE	128
 
 #define CSM_DP_IOCTL_BASE			'f'
 
