@@ -81,5 +81,6 @@ static inline bool csm_dp_mhi_is_ready(struct csm_dp_mhi *mhi)
 }
 
 void csm_dp_mhi_tx_poll(struct csm_dp_mhi *mhi);
+void csm_dp_mhi_rx_poll(struct csm_dp_mhi *mhi);
 
 #endif /* __CSM_DP_MHI_H__ */

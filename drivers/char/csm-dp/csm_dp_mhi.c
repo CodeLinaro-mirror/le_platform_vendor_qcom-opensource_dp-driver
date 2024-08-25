@@ -446,6 +446,18 @@ void csm_dp_mhi_tx_poll(struct csm_dp_mhi* mhi)
     } while (n == CSM_DP_NAPI_WEIGHT);
 }
 
+void csm_dp_mhi_rx_poll(struct csm_dp_mhi* mhi)
+{
+	int n;
+
+	do {
+		n = mhi_poll(mhi->mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
+		if (n < 0)
+			pr_err_ratelimited("Error Rx polling n:%d\n", n);
+		CSM_DP_INFO("%s: number of Rx poll %d\n", __func__, n);
+	} while (n == CSM_DP_NAPI_WEIGHT);
+}
+
 static int csm_dp_mhi_probe(
 	struct mhi_device *mhi_dev,
 	const struct mhi_device_id *id)
