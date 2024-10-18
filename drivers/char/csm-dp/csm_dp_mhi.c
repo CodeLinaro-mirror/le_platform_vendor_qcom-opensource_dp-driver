@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -426,7 +427,15 @@ int csm_dp_mhi_rx_replenish(struct csm_dp_mhi *mhi)
 	int ret;
 
 	spin_lock_bh(&mhi->rx_lock);
-	ret = __mhi_rx_replenish(mhi);
+
+	if(mhi->mhi_dev_destroyed) {
+		ret = -ENODEV;
+		pr_err_ratelimited("%s: Replenish error:%d Device destroyed\n",
+			__func__, ret);
+	}
+	else
+		ret = __mhi_rx_replenish(mhi);
+
 	spin_unlock_bh(&mhi->rx_lock);
 	return ret;
 }
@@ -524,6 +533,7 @@ static int csm_dp_mhi_probe(
 	mhi->rx_head_buf_cntrl = NULL;
 	mhi->rx_tail_buf_cntrl = NULL;
 
+	mhi->mhi_dev_destroyed = false;
 	CSM_DP_DEBUG("%s: csm_dp_mhi_rx_replenish\n", __func__);
 	if (mempool) {
 		ret = csm_dp_mempool_dma_map(mhi_dev->mhi_cntrl->cntrl_dev, mempool);
@@ -539,11 +549,11 @@ static int csm_dp_mhi_probe(
 		}
 	}
 
-	mhi->mhi_dev_destroyed = false;
 	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
 	return 0;
 
 err:
+	mhi->mhi_dev_destroyed = true;
 	csm_dp_cdev_del(pdev);
 	return ret;
 }
@@ -572,7 +582,10 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 	destroy_workqueue(mhi->mhi_dev_workqueue);
 	mhi_unprepare_from_transfer(mhi_dev);
 
+	spin_lock_bh(&mhi->rx_lock);
 	mhi->mhi_dev_destroyed = true;
+	spin_unlock_bh(&mhi->rx_lock);
+
 	/* wait for idle mhi_dev */
 	while (atomic_read(&mhi->mhi_dev_refcnt) > 0) {
 		CSM_DP_DEBUG("%s: mhi_dev_refcnt %d\n", __func__, atomic_read(&mhi->mhi_dev_refcnt));
