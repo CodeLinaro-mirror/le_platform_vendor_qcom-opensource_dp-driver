@@ -343,8 +343,11 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	 * will then link the Rx packets into pdrv->pending_packets
 	 */
 	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
-	if (ret < 0)
+	if (ret < 0) {
 		CSM_DP_LIMIT_ERROR("%s: Error rx polling %d\n", __func__, ret);
+		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
+		return ret;
+	}
 
 	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
