@@ -1,14 +1,10 @@
-/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
+
 #ifndef __CSM_DP__
 #define __CSM_DP__
 
@@ -36,10 +32,11 @@
 #define CSM_DP_CDEV_NAME	CSM_DP_MODULE_NAME
 #define CSM_DP_NAPI_WEIGHT 64
 
-#define CSM_DP_DEBUG	pr_debug
-#define CSM_DP_INFO	pr_info
-#define CSM_DP_ERROR	pr_err
-#define CSM_DP_WARN	pr_warn
+#define CSM_DP_DEBUG		pr_debug
+#define CSM_DP_INFO		pr_info
+#define CSM_DP_ERROR		pr_err
+#define CSM_DP_WARN		pr_warn
+#define CSM_DP_LIMIT_ERROR	pr_err_ratelimited
 
 struct vm_area_struct;
 

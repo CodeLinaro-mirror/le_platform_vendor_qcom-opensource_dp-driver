@@ -1,14 +1,8 @@
-/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
  * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/module.h>
@@ -166,7 +160,7 @@ err:
 			mhi->ul_buf_array[i].buf);
 	}
 	mhi->stats.rx_replenish_err++;
-	CSM_DP_ERROR("%s: failed to load rx buf!\n",
+	CSM_DP_LIMIT_ERROR("%s: failed to load rx buf!\n",
 			__func__);
 	return ret;
 }
@@ -276,7 +270,7 @@ static void __mhi_dl_xfer_cb(
 		 * (e.g. CONTROL) and we now get RX complete for 2nd mhi device (e.g. DATA).
 		 */
 		if (result->transaction_status != -ENOTCONN)
-			pr_err_ratelimited("%s: no mempool (ch %s bus %d VF %d status %d)\n",
+			CSM_DP_LIMIT_ERROR("%s: no mempool (ch %s bus %d VF %d status %d)\n",
 				__func__, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num,
 				result->transaction_status);
 		return;
@@ -430,7 +424,7 @@ int csm_dp_mhi_rx_replenish(struct csm_dp_mhi *mhi)
 
 	if(mhi->mhi_dev_destroyed) {
 		ret = -ENODEV;
-		pr_err_ratelimited("%s: Replenish error:%d Device destroyed\n",
+		CSM_DP_LIMIT_ERROR("%s: Replenish error:%d Device destroyed\n",
 			__func__, ret);
 	}
 	else
@@ -447,7 +441,8 @@ void csm_dp_mhi_tx_poll(struct csm_dp_mhi* mhi)
     do {
         n = mhi_poll(mhi->mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_TO_DEVICE);
         if (n < 0)
-            pr_err_ratelimited("Error Tx polling n:%d\n", n);
+            CSM_DP_LIMIT_ERROR("%s: Error Tx polling n:%d\n",
+		__func__, n);
     } while (n == CSM_DP_NAPI_WEIGHT);
 }
 
