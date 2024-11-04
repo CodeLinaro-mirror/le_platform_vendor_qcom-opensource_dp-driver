@@ -1,13 +1,8 @@
-/* Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2019-2022, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/init.h>
@@ -349,11 +344,11 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	 */
 	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
 	if (ret < 0)
-		pr_err_ratelimited("%s: Error rx polling %d\n", __func__, ret);
+		CSM_DP_LIMIT_ERROR("%s: Error rx polling %d\n", __func__, ret);
 
 	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
-		pr_err_ratelimited("%s: Error rx replenish %d\n", __func__, ret);
+		CSM_DP_LIMIT_ERROR("%s: Error rx replenish %d\n", __func__, ret);
 
 	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 
