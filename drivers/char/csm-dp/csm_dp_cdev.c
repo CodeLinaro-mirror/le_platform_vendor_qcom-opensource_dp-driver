@@ -813,16 +813,7 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 					    struct csm_dp_dev, cdev);
 	struct csm_dp_cdev *cdev;
 	struct csm_dp_mempool *mempool;
-	struct csm_dp_mhi *mhi;
-	struct csm_dp_rxqueue *rxq;
 	struct csm_dp_mempool_vma *mempool_vma;
-	unsigned int cluster, c_offset;
-	void *addr;
-	struct csm_dp_buf_cntrl *packet_start, *tmp;
-	csm_dp_ring_element_data_t offset;
-	int counter = 2;
-	uint32_t rx_data_free = 0;
-	uint32_t rx_control_free = 0;
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(cdev)) {
@@ -840,54 +831,15 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 	mutex_lock(&pdev->cdev_lock);
 	list_add_tail(&cdev->list, &pdev->cdev_head);
 
-	/*Free all the pending packets in Rx for UL data channel*/
 	mempool_vma = cdev->mempool_vma;
+
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_DATA]);
-	mhi = &pdev->mhi_data_dev;
-	// wait for any pending mempool buffers on DATA channel
-	if (csm_dp_mhi_is_ready(mhi)) {
-		while (counter--) {
-			csm_dp_mhi_rx_poll(mhi);
-			msleep(100);
-		}
-	}
-	packet_start = pdev->pending_packets;
-	while (packet_start) {
-		tmp = packet_start->next_packet;
-		packet_start->next_packet = NULL;
-		csm_dp_mempool_put_buf(mempool, packet_start + 1);
-		packet_start = tmp;
-		rx_data_free++;
-	}
+	/* Free all the pending packets in Rx for UL data channel */
+	free_rx_ring_buffers(mempool);
 
-	pdev->pending_packets = packet_start;
-	if (!pdev->pending_packets)
-		CSM_DP_INFO("%s: All RX data channel packets freed %u\n",
-							__func__, rx_data_free);
-	else
-		CSM_DP_ERROR("%s: Not all RX data channel packets freed %u\n",
-							__func__, rx_data_free);
-
-	/* Free all the pending packets in Rx for UL control channel*/
-	/* only one Rx queue */
-	rxq = &pdev->rxq[CSM_DP_RX_TYPE_FAPI];
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_CONTROL]);
-	while (!csm_dp_ring_is_empty(rxq->ring)) {
-		if (csm_dp_ring_read(rxq->ring, &offset)) {
-			CSM_DP_ERROR("%s: RxQ ring read failed\n", __func__);
-			break;
-		}
-		addr = csm_dp_mem_offset_addr(&mempool->mem, offset, &cluster, &c_offset);
-		csm_dp_mempool_put_buf(mempool, addr);
-		rx_control_free++;
-	}
-
-	if (csm_dp_ring_is_empty(rxq->ring))
-		CSM_DP_INFO("%s: All RX control channel packets freed %u\n",
-							__func__, rx_control_free);
-	else
-		CSM_DP_ERROR("%s: Not all RX control channel packets freed %u\n",
-							__func__, rx_control_free);
+	/* Free all the pending packets in Rx for UL control channel */
+	free_rx_ring_buffers(mempool);
 
 	mutex_unlock(&pdev->cdev_lock);
 
@@ -901,6 +853,7 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 static int csm_dp_cdev_close(struct inode *inode, struct file *file)
 {
 	struct csm_dp_cdev *cdev = (struct csm_dp_cdev *)file->private_data;
+	struct csm_dp_mempool *mempool;
 	struct csm_dp_mempool_vma *mempool_vma = cdev->mempool_vma;
 	struct csm_dp_dev *pdev = cdev->pdev;
 	int type;
@@ -908,6 +861,14 @@ static int csm_dp_cdev_close(struct inode *inode, struct file *file)
 	mutex_lock(&pdev->cdev_lock);
 	CSM_DP_INFO("%s: start pid=%u, cdev=%p bus_num %d vf_num %d\n",
 		  __func__, cdev->pid, cdev, pdev->bus_num, pdev->vf_num);
+
+	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_DATA]);
+	/* Free all the pending packets in Rx for UL data channel */
+	free_rx_ring_buffers(mempool);
+
+	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_CONTROL]);
+	/* Free all the pending packets in Rx for UL control channel */
+	free_rx_ring_buffers(mempool);
 
 	for (type = 0; type < CSM_DP_MEM_TYPE_LAST; type++, mempool_vma++) {
 		if (mempool_vma->usr_alloc)

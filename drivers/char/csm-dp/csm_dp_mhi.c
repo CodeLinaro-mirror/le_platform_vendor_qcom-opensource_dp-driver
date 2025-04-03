@@ -515,6 +515,8 @@ static int csm_dp_mhi_probe(
 		goto err;
 	}
 
+	free_rx_ring_buffers(mempool);
+
 	dev_set_drvdata(&mhi_dev->dev, pdev);
 
 	ret = mhi_prepare_for_transfer(mhi_dev, 0);

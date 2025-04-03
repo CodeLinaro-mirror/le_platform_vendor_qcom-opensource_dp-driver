@@ -859,6 +859,59 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 	return ptr;
 }
 
+void free_rx_ring_buffers(struct csm_dp_mempool *mempool)
+{
+	struct csm_dp_dev *pdev = mempool->dp_dev;
+	struct csm_dp_mem *mem = &mempool->mem;
+	struct csm_dp_buf_cntrl *p = NULL;
+	struct csm_dp_buf_cntrl *packet_start, *tmp;
+	char *cl_start = NULL;
+	unsigned int cl_buf_cnt;
+	void *buf = NULL;
+	int i, j, free_count = 0;
+
+	if (mempool) {
+		if (!csm_dp_mem_type_is_valid(mempool->type))
+			return;
+
+		packet_start = pdev->pending_packets;
+		while (packet_start) {
+			tmp = packet_start->next_packet;
+			packet_start->next_packet = NULL;
+			csm_dp_mempool_put_buf(mempool, packet_start + 1);
+			packet_start = tmp;
+			free_count++;
+		}
+
+		for (j = 0; j < mem->loc.num_cluster; j++) {
+			cl_start = mem->loc.cluster_kernel_addr[j];
+			if (j == mem->loc.num_cluster - 1)
+				cl_buf_cnt = mem->buf_cnt -
+				(mem->loc.buf_per_cluster * j);
+			else
+				cl_buf_cnt = mem->loc.buf_per_cluster;
+			for (i = 0; i < cl_buf_cnt; i++) {
+				p = (struct csm_dp_buf_cntrl *)(cl_start +
+				     (i * csm_dp_buf_true_size(mem)));
+
+				if (!p)
+					break;
+				buf = (char *)p + CSM_DP_L1_CACHE_BYTES;
+				if (!buf)
+					break;
+				if (p->state == CSM_DP_BUF_STATE_USER_RECV ||
+				    p->state == CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP) {
+					csm_dp_mempool_put_buf(mempool, buf);
+					free_count++;
+				}
+			}
+		}
+		CSM_DP_INFO("%s: %s %d RX buffers freed for bus %d VF %d\n",
+			    __func__, csm_dp_mem_type_to_str(mempool->type),
+			    free_count, pdev->bus_num, pdev->vf_num);
+	}
+}
+
 struct csm_dp_mempool *csm_dp_get_mempool(
 	struct csm_dp_dev *pdev,
 	struct csm_dp_buf_cntrl *buf_cntrl,
