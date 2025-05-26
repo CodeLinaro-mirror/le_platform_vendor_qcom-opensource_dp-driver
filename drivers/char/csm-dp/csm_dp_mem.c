@@ -415,10 +415,22 @@ static int csm_dp_mem_init(
 
 static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 {
-	struct csm_dp_mempool *mempool = csm_dp_mem_to_mempool(mem);
-	struct csm_dp_dev *pdev = mempool->dp_dev;
+	struct csm_dp_mempool *mempool = NULL;
+	struct csm_dp_dev *pdev = NULL;
 	int i;
 	unsigned long size;
+
+	if(!mem) {
+		CSM_DP_ERROR("%s: csm_dp_mem is NULL!\n", __func__);
+		return;
+	}
+	mempool = csm_dp_mem_to_mempool(mem);
+
+	if(!mempool) {
+		CSM_DP_ERROR("%s: csm_dp_mempool is NULL!\n", __func__);
+		return;
+	}
+	pdev = mempool->dp_dev;
 
 	spin_lock(&mempool->lock);
 	if (mem->loc.dma_mapped && mempool->dev) {
@@ -430,14 +442,18 @@ static void csm_dp_mem_cleanup(struct csm_dp_mem *mem)
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
-				mempool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= size;
+
+				if (pdev)
+					pdev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= size;
 			} else {
 				dma_unmap_single(
 					mempool->dev,
 					mem->loc.cluster_dma_addr[i],
 					CSM_DP_MEMPOOL_CLUSTER_SIZE,
 					mem->loc.direction);
-				mempool->dp_dev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
+
+				if (pdev)
+					pdev->stats.mem_stats.mempool_mem_dma_mapped[mempool->type] -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 				size -= CSM_DP_MEMPOOL_CLUSTER_SIZE;
 			}
 		}
