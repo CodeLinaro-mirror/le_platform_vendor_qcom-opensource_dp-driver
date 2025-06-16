@@ -1006,6 +1006,12 @@ void csm_dp_cdev_del(struct csm_dp_dev *pdev)
 		mutex_unlock(&pdev->cdev_lock);
 		return;
 	}
+	if (!list_empty(&pdev->cdev_head)) {
+		CSM_DP_ERROR("%s:Device file already open; skipping device deletion\n", __func__);
+		mutex_unlock(&pdev->cdev_lock);
+		return;
+	}
+
 	pdev->cdev_inited = false;
 
 	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);

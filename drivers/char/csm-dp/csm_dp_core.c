@@ -344,14 +344,16 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	 */
 	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
 	if (ret < 0) {
-		CSM_DP_LIMIT_ERROR("%s: Error rx polling %d\n", __func__, ret);
+		CSM_DP_LIMIT_ERROR("%s: Error:%d rx polling for bus:%d VF:%d %s\n",
+				   __func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
 		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 		return ret;
 	}
 
 	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
-		CSM_DP_LIMIT_ERROR("%s: Error rx replenish %d\n", __func__, ret);
+		CSM_DP_LIMIT_ERROR("%s: Error:%d rx replenish for bus:%d VF:%d %s\n",
+				   __func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
 
 	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 

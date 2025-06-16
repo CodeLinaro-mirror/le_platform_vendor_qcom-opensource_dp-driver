@@ -684,6 +684,7 @@ DEFINE_DEBUGFS_OPS(debugfs_start_recovery_data_dev, debugfs_start_recovery_dev_r
 static int debugfs_mhi_show(struct seq_file *s, void *unused)
 {
 	struct csm_dp_mhi *mhi = (struct csm_dp_mhi *)s->private;
+	struct mhi_device *mhi_dev = mhi->mhi_dev;
 
 	seq_printf(s, "MHIDevice:              %llx\n", (u64) mhi->mhi_dev);
 	seq_puts(s, "Stats:\n");
@@ -691,7 +692,6 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 	seq_printf(s, "    TX_ACKED:           %lu\n", mhi->stats.tx_acked);
 	seq_printf(s, "    TX_ERR:             %lu\n", mhi->stats.tx_err);
 	seq_printf(s, "    RX:                 %lu\n", mhi->stats.rx_cnt);
-	seq_printf(s, "    RX_ERR:             %lu\n", mhi->stats.rx_err);
 	seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
 		   mhi->stats.rx_out_of_buf);
 	seq_printf(s, "    RX_REPLENISH:       %lu\n",
@@ -700,6 +700,12 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 		   mhi->stats.rx_replenish_err);
 	seq_printf(s, "    CHANNEL_ERR_COUNT:   %lu\n",
 		   mhi->stats.ch_err_cnt);
+	if (mhi_dev) {
+		seq_printf(s, "    MHI_TX_RING_LAST_REQ_COUNT:   %d\n",
+			   mhi_get_free_desc_count(mhi->mhi_dev, DMA_TO_DEVICE));
+		seq_printf(s, "    MHI_RX_RING_LAST_REQ_COUNT:   %d\n",
+			   mhi_get_free_desc_count(mhi->mhi_dev, DMA_FROM_DEVICE));
+	}
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_mhi, debugfs_mhi_show, NULL);

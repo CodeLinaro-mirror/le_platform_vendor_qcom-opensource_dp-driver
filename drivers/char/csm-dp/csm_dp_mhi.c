@@ -160,8 +160,8 @@ err:
 			mhi->ul_buf_array[i].buf);
 	}
 	mhi->stats.rx_replenish_err++;
-	CSM_DP_LIMIT_ERROR("%s: failed to load rx buf!\n",
-			__func__);
+	CSM_DP_LIMIT_ERROR("%s: failed to load rx buf for bus:%d VF:%d %s\n",
+			__func__, pdev->bus_num, pdev->vf_num, csm_dp_mem_type_to_str(mempool->type));
 	return ret;
 }
 
@@ -210,20 +210,26 @@ static void __mhi_ul_xfer_cb(
 	while (buf_cntrl) {
 		mempool = csm_dp_get_mempool(pdev, buf_cntrl, NULL);
 		if (unlikely(mempool == NULL)) {
-			CSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
-				  __func__, addr);
+			CSM_DP_LIMIT_ERROR("%s: cannot find mempool for ch %s bus %d VF %d, addr=0x%p\n",
+					   __func__, ch_name(mhi_dev->id->driver_data),
+					   pdev->bus_num, pdev->vf_num, addr);
 			return;
 		}
 
 		if (mempool->signature != CSM_DP_MEMPOOL_SIG) {
-			CSM_DP_ERROR("%s: mempool %p signature 0x%x error, expect 0x%x\n",
-				  __func__, mempool, mempool->signature, CSM_DP_MEMPOOL_SIG);
+			CSM_DP_LIMIT_ERROR("%s: mempool 0x%p signature 0x%x error, expect 0x%x"
+					   " for ch %s bus %d VF %d\n",
+					   __func__, mempool, mempool->signature,
+					   CSM_DP_MEMPOOL_SIG, ch_name(mhi_dev->id->driver_data),
+					   pdev->bus_num, pdev->vf_num);
 			return;
 		}
 
 		if (atomic_read(&mempool->out_xmit) == 0) {
-			CSM_DP_ERROR("%s: mempool %p out xmit cnt should not be zero\n",
-				  __func__, mempool);
+			CSM_DP_LIMIT_ERROR("%s: mempool 0x%p out xmit cnt should not be zero"
+					   " for ch %s bus %d VF %d\n",
+					   __func__, mempool, ch_name(mhi_dev->id->driver_data),
+					   pdev->bus_num, pdev->vf_num);
 			return;
 		}
 
@@ -320,7 +326,6 @@ static void __mhi_dl_xfer_cb(
 		packet_end->len = result->bytes_xferd;
 
 		if (result->transaction_status == -ENOTCONN) {
-			mhi->stats.rx_err++;
 			for (; packet_start; packet_start = packet_start->next)
 				csm_dp_mempool_put_buf(mempool, packet_start + 1);
 			return;
@@ -332,8 +337,10 @@ static void __mhi_dl_xfer_cb(
 		return;
 	}
 
-	CSM_DP_ERROR("couldn't find end of packet, buf_addr 0x%p rx_head_buf_cntrl 0x%p rx_tail_buf_cntrl 0x%p buf_count %d",
-			result->buf_addr, mhi->rx_head_buf_cntrl, mhi->rx_tail_buf_cntrl, buf_count);
+	CSM_DP_LIMIT_ERROR("couldn't find end of packet for bus:%d VF:%d %s,"
+			   "buf_addr 0x%p rx_head_buf_cntrl 0x%p rx_tail_buf_cntrl 0x%p buf_count %d\n",
+			   pdev->bus_num, pdev->vf_num, csm_dp_mem_type_to_str(mempool->type),
+			   result->buf_addr, mhi->rx_head_buf_cntrl, mhi->rx_tail_buf_cntrl, buf_count);
 	mhi->rx_head_buf_cntrl = packet_start;
 }
 
@@ -458,6 +465,20 @@ void csm_dp_mhi_rx_poll(struct csm_dp_mhi* mhi)
 	} while (n == CSM_DP_NAPI_WEIGHT);
 }
 
+static void csm_dp_mhi_packet_stats_reset(struct csm_dp_mhi *mhi)
+{
+	if(mhi) {
+		mhi->stats.tx_cnt = 0;
+		mhi->stats.tx_acked = 0;
+		mhi->stats.tx_err = 0;
+		mhi->stats.rx_cnt = 0;
+		mhi->stats.rx_out_of_buf = 0;
+		mhi->stats.rx_replenish = 0;
+		mhi->stats.rx_replenish_err = 0;
+		mhi->stats.ch_err_cnt = 0;
+	}
+}
+
 static int csm_dp_mhi_probe(
 	struct mhi_device *mhi_dev,
 	const struct mhi_device_id *id)
@@ -468,15 +489,14 @@ static int csm_dp_mhi_probe(
 	struct csm_dp_mempool *mempool;
 	unsigned int bus_num, vf_num;
 
-	CSM_DP_INFO("%s: probing mhi chan %s driver_data %ld\n",
-		     __func__, id->chan, id->driver_data);
+	bus_num = mhi_get_device_bus_number(mhi_dev->mhi_cntrl);
+	vf_num = mhi_get_device_instance_id(mhi_dev->mhi_cntrl);
+	CSM_DP_INFO("%s: probing bus:%d VF:%d mhi chan %s dp chan %s\n",
+		     __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 
 	if (__pdrv == NULL)
 		return -ENODEV;
 
-	bus_num = mhi_get_device_bus_number(mhi_dev->mhi_cntrl);
-	vf_num = mhi_get_device_instance_id(mhi_dev->mhi_cntrl);
-	CSM_DP_INFO("%s: bus %d VF %d\n", __func__, bus_num, vf_num);
 	if (vf_num < 0) {
 		/* SR-IOV disabled, create single device node */
 		pdev = &__pdrv->dp_devs[bus_num * CSM_DP_MAX_NUM_VFS];
@@ -510,25 +530,29 @@ static int csm_dp_mhi_probe(
 		mempool = pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA];
 		break;
 	default:
-		CSM_DP_ERROR("%s: unexpected driver_data %ld\n", __func__, id->driver_data);
+		CSM_DP_ERROR("%s: unexpected driver_data %ld for bus:%d VF:%d\n", __func__,
+			     id->driver_data, bus_num, vf_num);
 		ret = -EINVAL;
 		goto err;
 	}
 
 	free_rx_ring_buffers(mempool, true);
+	csm_dp_mhi_packet_stats_reset(mhi);
 
 	dev_set_drvdata(&mhi_dev->dev, pdev);
 
 	ret = mhi_prepare_for_transfer(mhi_dev, 0);
 	if (ret) {
-		CSM_DP_ERROR("%s: mhi_prepare_for_transfer failed\n", __func__);
+		CSM_DP_ERROR("%s: mhi_prepare_for_transfer failed for bus:%d VF:%d mhi chan %s dp chan %s\n",
+			     __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 		goto err;
 	}
 
 	/* Creating workqueue */
 	mhi->mhi_dev_workqueue = alloc_workqueue("csm_dp_mhi_workqueue", WQ_UNBOUND|WQ_MEM_RECLAIM, 0);
 	if (!mhi->mhi_dev_workqueue) {
-		CSM_DP_ERROR("%s: Failed to allocate workqueue\n", __func__);
+		CSM_DP_ERROR("%s: Failed to allocate workqueue for bus:%d VF:%d mhi chan %s dp chan %s\n",
+			     __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 		goto err;
 	}
 
@@ -547,18 +571,24 @@ static int csm_dp_mhi_probe(
 	if (mempool) {
 		ret = csm_dp_mempool_dma_map(mhi_dev->mhi_cntrl->cntrl_dev, mempool);
 		if (ret) {
-			CSM_DP_ERROR("%s: dma_map failed, mempool type %d ret %d\n", __func__, mempool->type, ret);
+			CSM_DP_ERROR("%s: dma_map failed for bus:%d VF:%d mhi chan %s dp chan %s, "
+				     "mempool type %d ret %d\n",
+				     __func__, bus_num, vf_num, id->chan,
+				     ch_name(id->driver_data), mempool->type, ret);
 			goto err;
 		}
 
 		ret = csm_dp_mhi_rx_replenish(mhi);
 		if (ret) {
-			CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed\n", __func__);
+			CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed "
+				     "for for bus:%d VF:%d mhi chan %s dp chan %s\n",
+				     __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 			goto err;
 		}
 	}
 
-	CSM_DP_DEBUG("%s: mhi_probed\n", __func__);
+	CSM_DP_INFO("%s: successful for bus:%d VF:%d mhi chan %s dp chan %s\n",
+                    __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 	return 0;
 
 err:
@@ -572,8 +602,8 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
 	struct csm_dp_mhi *mhi;
 
-	CSM_DP_INFO("%s: mhi chan %s driver_data %ld bus %d VF %d\n",
-		__func__, mhi_dev->id->chan, mhi_dev->id->driver_data, pdev->bus_num, pdev->vf_num);
+	CSM_DP_INFO("%s: mhi chan %s dp chan %s bus %d VF %d\n",
+		__func__, mhi_dev->id->chan, ch_name(mhi_dev->id->driver_data), pdev->bus_num, pdev->vf_num);
 
 	switch (mhi_dev->id->driver_data) {
 	case CSM_DP_CH_CONTROL:

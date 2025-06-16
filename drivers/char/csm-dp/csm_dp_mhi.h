@@ -21,7 +21,6 @@ struct csm_dp_mhi_stats {
 	unsigned long tx_acked;
 	unsigned long tx_err;
 	unsigned long rx_cnt;
-	unsigned long rx_err;
 	unsigned long rx_out_of_buf;
 
 	unsigned long rx_replenish;
