@@ -859,7 +859,7 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 	return ptr;
 }
 
-void free_rx_ring_buffers(struct csm_dp_mempool *mempool)
+void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe)
 {
 	struct csm_dp_dev *pdev = mempool->dp_dev;
 	struct csm_dp_mem *mem = &mempool->mem;
@@ -869,6 +869,19 @@ void free_rx_ring_buffers(struct csm_dp_mempool *mempool)
 	unsigned int cl_buf_cnt;
 	void *buf = NULL;
 	int i, j, free_count = 0;
+	struct task_struct *task;
+	bool task_active = true;
+
+	/* Check if L2 is running and has a valid PID on mhi_probe */
+	if (probe && pdev->pid != -EINVAL)
+	{
+		task = pid_task(find_vpid(pdev->pid), PIDTYPE_PID);
+
+		if (!task || strncmp(pdev->pid_name, task->comm, TASK_COMM_LEN) != 0) {
+				task_active = false;
+				CSM_DP_INFO("%s: pid %d l2 task not active\n",__func__, pdev->pid);
+		}
+	}
 
 	if (mempool) {
 		if (!csm_dp_mem_type_is_valid(mempool->type))
@@ -899,10 +912,22 @@ void free_rx_ring_buffers(struct csm_dp_mempool *mempool)
 				buf = (char *)p + CSM_DP_L1_CACHE_BYTES;
 				if (!buf)
 					break;
-				if (p->state == CSM_DP_BUF_STATE_USER_RECV ||
-				    p->state == CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP) {
+
+				if (p->state == CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP) {
 					csm_dp_mempool_put_buf(mempool, buf);
 					free_count++;
+				}
+				if (list_empty(&pdev->cdev_head) || (!task_active)) {
+					if (p->state == CSM_DP_BUF_STATE_USER_RECV) {
+						csm_dp_mempool_put_buf(mempool, buf);
+						free_count++;
+					}
+				}
+				if (probe) {
+					if (p->state == CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA) {
+						csm_dp_mempool_put_buf(mempool, buf);
+						free_count++;
+					}
 				}
 			}
 		}
