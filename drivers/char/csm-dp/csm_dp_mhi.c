@@ -515,7 +515,7 @@ static int csm_dp_mhi_probe(
 		goto err;
 	}
 
-	free_rx_ring_buffers(mempool);
+	free_rx_ring_buffers(mempool, true);
 
 	dev_set_drvdata(&mhi_dev->dev, pdev);
 

@@ -108,7 +108,7 @@ int csm_dp_mempool_get_cfg(
 int csm_dp_mempool_put_buf(struct csm_dp_mempool *mempool, void *vaddr);
 void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 		unsigned int *cluster, unsigned int *c_offset);
-void free_rx_ring_buffers(struct csm_dp_mempool *mempool);
+void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe);
 
 static inline bool csm_dp_mempool_hold(struct csm_dp_mempool *mempool)
 {

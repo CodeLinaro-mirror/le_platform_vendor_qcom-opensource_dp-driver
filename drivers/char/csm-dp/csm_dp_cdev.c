@@ -823,29 +823,31 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 
 	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);
 
-	cdev->pdev = pdev;
 	cdev->pid = current->tgid;
+	pdev->pid = cdev->pid;
+	strncpy(pdev->pid_name, current->comm, TASK_COMM_LEN);
+	cdev->pdev = pdev;
 
 	__cdev_init_mempool_vma(cdev);
 
 	mutex_lock(&pdev->cdev_lock);
-	list_add_tail(&cdev->list, &pdev->cdev_head);
 
 	mempool_vma = cdev->mempool_vma;
 
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_DATA]);
 	/* Free all the pending packets in Rx for UL data channel */
-	free_rx_ring_buffers(mempool);
+	free_rx_ring_buffers(mempool, false);
 
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_CONTROL]);
 	/* Free all the pending packets in Rx for UL control channel */
-	free_rx_ring_buffers(mempool);
+	free_rx_ring_buffers(mempool, false);
 
+	list_add_tail(&cdev->list, &pdev->cdev_head);
 	mutex_unlock(&pdev->cdev_lock);
 
 	file->private_data = cdev;
 
-	CSM_DP_INFO("%s: end cdev=%p pid=%u bus_num %d vf_num %d\n", __func__, cdev, cdev->pid, pdev->bus_num, pdev->vf_num);
+	CSM_DP_INFO("%s: end cdev=%p pid=%u process_name=%s bus_num %d vf_num %d\n", __func__, cdev, pdev->pid, pdev->pid_name, pdev->bus_num, pdev->vf_num);
 
 	return 0;
 }
@@ -858,23 +860,24 @@ static int csm_dp_cdev_close(struct inode *inode, struct file *file)
 	struct csm_dp_dev *pdev = cdev->pdev;
 	int type;
 
+	pdev->pid = -EINVAL;
 	mutex_lock(&pdev->cdev_lock);
 	CSM_DP_INFO("%s: start pid=%u, cdev=%p bus_num %d vf_num %d\n",
 		  __func__, cdev->pid, cdev, pdev->bus_num, pdev->vf_num);
+	list_del(&cdev->list);
 
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_DATA]);
 	/* Free all the pending packets in Rx for UL data channel */
-	free_rx_ring_buffers(mempool);
+	free_rx_ring_buffers(mempool, false);
 
 	mempool = &(*mempool_vma->pp_mempool[CSM_DP_MEM_TYPE_UL_CONTROL]);
 	/* Free all the pending packets in Rx for UL control channel */
-	free_rx_ring_buffers(mempool);
+	free_rx_ring_buffers(mempool, false);
 
 	for (type = 0; type < CSM_DP_MEM_TYPE_LAST; type++, mempool_vma++) {
 		if (mempool_vma->usr_alloc)
 			csm_dp_mempool_put(*mempool_vma->pp_mempool);
 	}
-	list_del(&cdev->list);
 
 	kfree(cdev);
 
@@ -945,6 +948,8 @@ int csm_dp_cdev_add(struct csm_dp_dev *pdev, struct device* mhi_dev)
 	int ret, new_devno;
 	struct csm_dp_drv *pdrv = pdev->pdrv;
 	unsigned int index = pdev - pdrv->dp_devs;
+
+	pdev->pid = -EINVAL;
 
 	mutex_lock(&pdev->cdev_lock);
 	CSM_DP_INFO("%s: start bus_num %d vf_num %d\n", __func__, pdev->bus_num, pdev->vf_num);

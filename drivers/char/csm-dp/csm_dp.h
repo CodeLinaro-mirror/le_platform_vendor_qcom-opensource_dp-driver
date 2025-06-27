@@ -21,6 +21,7 @@
 #include <linux/netdevice.h>
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
+#include <linux/sched.h>
 
 #include <linux/csm_dp_ioctl.h>
 
@@ -145,6 +146,8 @@ struct csm_dp_dev {
 	struct csm_dp_mhi mhi_control_dev;	/* control path Tx/Rx */
 	struct csm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
 	bool cdev_inited;
+	pid_t pid;
+	char pid_name[TASK_COMM_LEN+1];
 	unsigned int bus_num;
 	unsigned int vf_num;
 	struct cdev cdev;
