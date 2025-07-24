@@ -6,12 +6,14 @@
  */
 
 #include "csm_dp.h"
+#include "csm_dp_mhi.h"
 #ifdef CONFIG_DEBUG_FS
 
 #include <linux/kernel.h>
 #include <linux/debugfs.h>
 #include <linux/atomic.h>
 #include <linux/slab.h>
+#include <linux/platform_device.h>
 
 #define MEM_DUMP_COL_WIDTH 16
 #define MAX_MEM_DUMP_SIZE 256
@@ -692,6 +694,16 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 	seq_printf(s, "    TX_ACKED:           %lu\n", mhi->stats.tx_acked);
 	seq_printf(s, "    TX_ERR:             %lu\n", mhi->stats.tx_err);
 	seq_printf(s, "    RX:                 %lu\n", mhi->stats.rx_cnt);
+
+	if (mhi_dev) {
+		struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
+		struct csm_dp_core_stats *stats = &pdev->stats;
+		bool is_control = (mhi_dev->id->driver_data == CSM_DP_CH_CONTROL);
+
+		if (stats && is_control)
+			seq_printf(s, "    RX_DROP:            %lu\n", stats->rx_drop);
+	}
+
 	seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
 		   mhi->stats.rx_out_of_buf);
 	seq_printf(s, "    RX_REPLENISH:       %lu\n",

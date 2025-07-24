@@ -114,8 +114,8 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 {
 	struct csm_dp_mempool *mempool;
 	struct csm_dp_rxqueue *rxq;
-	unsigned int offset;
-	unsigned int cl;
+	struct csm_dp_buf_cntrl *packet_start = buf_cntrl, *packet_next;
+	unsigned int offset, cl, i;
 	void *addr = buf_cntrl + 1;
 
 	if (unlikely(pdev == NULL || addr == NULL || !length)) {
@@ -130,15 +130,21 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 		return;
 	}
 
+	for (i = 0; i < buf_cntrl->buf_count; i++) {
+		packet_next = packet_start->next;
+		packet_start->state = CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP;
+		packet_start = packet_next;
+	}
+	packet_start = buf_cntrl;
+	packet_next = NULL;
+
 	if (mempool->type == CSM_DP_MEM_TYPE_UL_DATA) {
 		struct csm_dp_buf_cntrl **p = &pdev->pending_packets;
 
 		while (*p)
 			p = &((*p)->next_packet);
 
-		buf_cntrl->state = CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP;
 		*p = buf_cntrl;
-
 		return;
 	}
 
@@ -150,10 +156,6 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 		goto free_rxbuf;
 	}
 
-#ifdef CSM_DP_BUFFER_FENCING
-	csm_dp_set_buf_state(addr,
-			CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
-#endif
 	offset = csm_dp_get_mem_offset(addr, &mempool->mem.loc, cl);
 	if (csm_dp_ring_write(rxq->ring, offset)) {
 		CSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
@@ -163,8 +165,13 @@ void csm_dp_rx(struct csm_dp_dev *pdev, struct csm_dp_buf_cntrl *buf_cntrl, unsi
 	pdev->stats.rx_cnt++;
 	return;
 free_rxbuf:
-	pdev->stats.rx_drop++;
-	csm_dp_mempool_put_buf(mempool, addr);
+	for (i = 0; i < buf_cntrl->buf_count; i++) {
+		addr = packet_start + 1;
+		packet_next = packet_start->next;
+		csm_dp_mempool_put_buf(mempool, addr);
+		pdev->stats.rx_drop++;
+		packet_start = packet_next;
+        }
 }
 
 int csm_dp_rx_init(struct csm_dp_dev *pdev)

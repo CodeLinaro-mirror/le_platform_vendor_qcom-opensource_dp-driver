@@ -875,18 +875,95 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 	return ptr;
 }
 
+void get_mempool_buf_status(struct csm_dp_mempool *mempool)
+{
+	struct csm_dp_dev *pdev = mempool->dp_dev;
+	struct csm_dp_mem *mem = &mempool->mem;
+	struct csm_dp_buf_cntrl *p = NULL;
+	char *cl_start = NULL;
+	unsigned int cl_buf_cnt;
+	unsigned int k_free = 0, u_free = 0, u_recev = 0, k_msg_q_app = 0, k_recev_dma = 0;
+	unsigned int k_tx_dma = 0, k_tx_dma_cmp = 0, u_alloc = 0;
+	void *buf = NULL;
+	int i, j;
+
+	if (mempool) {
+		if (!csm_dp_mem_type_is_valid(mempool->type))
+			return;
+
+		for (j = 0; j < mem->loc.num_cluster; j++) {
+			cl_start = mem->loc.cluster_kernel_addr[j];
+			if (j == mem->loc.num_cluster - 1)
+				cl_buf_cnt = mem->buf_cnt -
+				(mem->loc.buf_per_cluster * j);
+			else
+				cl_buf_cnt = mem->loc.buf_per_cluster;
+			for (i = 0; i < cl_buf_cnt; i++) {
+				p = (struct csm_dp_buf_cntrl *)(cl_start +
+					(i * csm_dp_buf_true_size(mem)));
+
+				if (!p)
+					break;
+				buf = (char *)p + CSM_DP_L1_CACHE_BYTES;
+				if (!buf)
+					break;
+				if (p->state == CSM_DP_BUF_STATE_USER_RECV)
+					u_recev++;
+				else if (p->state == CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP)
+					k_msg_q_app++;
+				else if (p->state == CSM_DP_BUF_STATE_KERNEL_FREE)
+					k_free++;
+				else if (p->state == CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA)
+					k_recev_dma++;
+				else if (p->state == CSM_DP_BUF_STATE_USER_FREE)
+					u_free++;
+				else if (p->state == CSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
+					k_tx_dma++;
+				else if (p->state == CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP)
+					k_tx_dma_cmp++;
+				else if (p->state == CSM_DP_BUF_STATE_USER_ALLOC)
+					u_alloc++;
+			}
+		}
+		CSM_DP_LIMIT_ERROR("%s: %s Buffer status for bus %d VF %d\n"
+				"KERNEL_FREE:%u\n"
+				"KERNEL_ALLOC_RECV_DMA:%u\n"
+				"KERNEL_RECVCMP_MSGQ_TO_APP:%u\n"
+				"KERNEL_XMIT_DMA:%u\n"
+				"KERNEL_XMIT_DMA_COMP:%u\n"
+				"USER_FREE:%u\n"
+				"USER_ALLOC:%u\n"
+				"USER_RECV:%u\n",
+				__func__,
+				csm_dp_mem_type_to_str(mempool->type),
+				pdev->bus_num,
+				pdev->vf_num,
+				k_free,
+				k_recev_dma,
+				k_msg_q_app,
+				k_tx_dma,
+				k_tx_dma_cmp,
+				u_free,
+				u_alloc,
+				u_recev);
+        }
+}
+
 void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe)
 {
 	struct csm_dp_dev *pdev = mempool->dp_dev;
 	struct csm_dp_mem *mem = &mempool->mem;
 	struct csm_dp_buf_cntrl *p = NULL;
 	struct csm_dp_buf_cntrl *packet_start, *tmp;
+	struct csm_dp_rxqueue *rxq;
 	char *cl_start = NULL;
 	unsigned int cl_buf_cnt;
 	void *buf = NULL;
 	int i, j, free_count = 0;
 	struct task_struct *task;
 	bool task_active = true;
+	unsigned int cluster, c_offset;
+	csm_dp_ring_element_data_t offset;
 
 	/* Check if L2 is running and has a valid PID on mhi_probe */
 	if (probe && pdev->pid != -EINVAL)
@@ -903,13 +980,30 @@ void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe)
 		if (!csm_dp_mem_type_is_valid(mempool->type))
 			return;
 
-		packet_start = pdev->pending_packets;
-		while (packet_start) {
-			tmp = packet_start->next_packet;
-			packet_start->next_packet = NULL;
-			csm_dp_mempool_put_buf(mempool, packet_start + 1);
-			packet_start = tmp;
-			free_count++;
+		if (mempool->type == CSM_DP_MEM_TYPE_UL_DATA) {
+			packet_start = pdev->pending_packets;
+			while (packet_start) {
+				tmp = packet_start->next_packet;
+				packet_start->next_packet = NULL;
+				csm_dp_mempool_put_buf(mempool, packet_start + 1);
+				packet_start = tmp;
+				free_count++;
+			}
+		}
+
+		if (mempool->type == CSM_DP_MEM_TYPE_UL_CONTROL) {
+			rxq = &pdev->rxq[CSM_DP_RX_TYPE_FAPI];
+			while (rxq && !csm_dp_ring_is_empty(rxq->ring)) {
+				if (csm_dp_ring_read(rxq->ring, &offset)) {
+					CSM_DP_ERROR("%s: RxQ ring read failed\n", __func__);
+					break;
+				}
+				buf = csm_dp_mem_offset_addr(&mempool->mem, offset, &cluster, &c_offset);
+				csm_dp_mempool_put_buf(mempool, buf);
+				free_count++;
+			}
+			if (! csm_dp_ring_is_empty(rxq->ring))
+				CSM_DP_ERROR("%s: Not all RX control channel packets freed \n", __func__);
 		}
 
 		for (j = 0; j < mem->loc.num_cluster; j++) {

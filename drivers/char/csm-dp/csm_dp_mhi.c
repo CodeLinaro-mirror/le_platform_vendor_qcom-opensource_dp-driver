@@ -162,6 +162,7 @@ err:
 	mhi->stats.rx_replenish_err++;
 	CSM_DP_LIMIT_ERROR("%s: failed to load rx buf for bus:%d VF:%d %s\n",
 			__func__, pdev->bus_num, pdev->vf_num, csm_dp_mem_type_to_str(mempool->type));
+	get_mempool_buf_status(mempool);
 	return ret;
 }
 
@@ -338,9 +339,11 @@ static void __mhi_dl_xfer_cb(
 	}
 
 	CSM_DP_LIMIT_ERROR("couldn't find end of packet for bus:%d VF:%d %s,"
-			   "buf_addr 0x%p rx_head_buf_cntrl 0x%p rx_tail_buf_cntrl 0x%p buf_count %d\n",
+			   "buf_addr 0x%p bytes:%lu "
+			   "rx_head_buf_cntrl 0x%p rx_tail_buf_cntrl 0x%p buf_count %d\n",
 			   pdev->bus_num, pdev->vf_num, csm_dp_mem_type_to_str(mempool->type),
-			   result->buf_addr, mhi->rx_head_buf_cntrl, mhi->rx_tail_buf_cntrl, buf_count);
+			   result->buf_addr, result->bytes_xferd, mhi->rx_head_buf_cntrl,
+			   mhi->rx_tail_buf_cntrl, buf_count);
 	mhi->rx_head_buf_cntrl = packet_start;
 }
 
@@ -465,9 +468,14 @@ void csm_dp_mhi_rx_poll(struct csm_dp_mhi* mhi)
 	} while (n == CSM_DP_NAPI_WEIGHT);
 }
 
-static void csm_dp_mhi_packet_stats_reset(struct csm_dp_mhi *mhi)
+static void csm_dp_mhi_packet_stats_reset(struct csm_dp_mhi *mhi,
+					  struct csm_dp_dev *pdev,
+					  enum csm_dp_channel ch)
 {
-	if(mhi) {
+	struct csm_dp_core_stats *stats = &pdev->stats;
+	bool is_control = (ch == CSM_DP_CH_CONTROL);
+
+	if (mhi) {
 		mhi->stats.tx_cnt = 0;
 		mhi->stats.tx_acked = 0;
 		mhi->stats.tx_err = 0;
@@ -476,6 +484,8 @@ static void csm_dp_mhi_packet_stats_reset(struct csm_dp_mhi *mhi)
 		mhi->stats.rx_replenish = 0;
 		mhi->stats.rx_replenish_err = 0;
 		mhi->stats.ch_err_cnt = 0;
+		if (stats && is_control)
+			stats->rx_drop = 0;
 	}
 }
 
@@ -537,7 +547,7 @@ static int csm_dp_mhi_probe(
 	}
 
 	free_rx_ring_buffers(mempool, true);
-	csm_dp_mhi_packet_stats_reset(mhi);
+	csm_dp_mhi_packet_stats_reset(mhi, pdev, id->driver_data);
 
 	dev_set_drvdata(&mhi_dev->dev, pdev);
 
