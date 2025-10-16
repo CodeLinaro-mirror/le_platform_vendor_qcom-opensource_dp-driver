@@ -14,6 +14,7 @@
 #include <linux/atomic.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
+#include <linux/mod_devicetable.h>
 
 #define MEM_DUMP_COL_WIDTH 16
 #define MAX_MEM_DUMP_SIZE 256
