@@ -1,0 +1,5 @@
+debian/Makefile usr/src/dp-driver-1.0/
+drivers usr/src/dp-driver-1.0/
+include usr/src/dp-driver-1.0/
+debian/dkms.conf usr/src/dp-driver-1.0/
+include/uapi/linux/csm_dp_ioctl.h usr/include/linux/

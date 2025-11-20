@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ "$1" = "configure" ]; then
+    dkms add -m dp-driver -v 1.0 || exit 1
+    dkms build -m dp-driver -v 1.0 || exit 1
+    dkms install -m dp-driver -v 1.0 || exit 1
+    modprobe csm_dp || exit 1
+fi

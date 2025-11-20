@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd /var/lib/dkms/mhi-host/1.0/source/
+make > /dev/null
+cd -

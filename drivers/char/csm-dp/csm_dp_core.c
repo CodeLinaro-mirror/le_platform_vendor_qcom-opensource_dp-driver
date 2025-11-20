@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/init.h>
@@ -10,6 +9,7 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/of_device.h>
+#include <linux/version.h>
 #include "csm_dp.h"
 
 #define DEFAULT_RX_QUEUE_SIZE 1024
@@ -490,8 +490,13 @@ static int csm_dp_core_init(struct csm_dp_drv *pdrv)
 		mutex_init(&pdev->cdev_lock);
 		INIT_LIST_HEAD(&pdev->cdev_head);
 		init_dummy_netdev(&pdev->dummy_dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+		netif_napi_add_weight(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
+							CSM_DP_NAPI_WEIGHT);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
 		netif_napi_add(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
 							CSM_DP_NAPI_WEIGHT);
+#endif
 		napi_enable(&pdev->napi);
 		INIT_WORK(&pdev->alloc_work, csm_dp_alloc_work);
 	}

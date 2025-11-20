@@ -1,0 +1,9 @@
+Source: dp-driver
+Maintainer: Sivareddy Surasani <ssurasan@qti.qualcomm.com>
+Build-Depends: debhelper-compat (= 12)
+
+Package: dp-driver
+Architecture: all
+Depends: dkms, mhi-host
+Description: debian package for dp-driver
+ This package installs dp driver.

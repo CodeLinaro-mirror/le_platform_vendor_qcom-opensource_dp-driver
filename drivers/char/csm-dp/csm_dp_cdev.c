@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/slab.h>
@@ -13,6 +12,7 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 #include <linux/dma-mapping.h>
+#include <linux/version.h>
 
 #include "csm_dp.h"
 
@@ -903,7 +903,11 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 
 	CSM_DP_INFO("%s: start\n", __func__);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+	pdrv->dev_class = class_create(CSM_DP_DEV_CLASS_NAME);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
 	pdrv->dev_class = class_create(THIS_MODULE, CSM_DP_DEV_CLASS_NAME);
+#endif
 	if (IS_ERR_OR_NULL(pdrv->dev_class)) {
 		CSM_DP_ERROR("%s: class_create failed\n", __func__);
 		return -ENOMEM;
