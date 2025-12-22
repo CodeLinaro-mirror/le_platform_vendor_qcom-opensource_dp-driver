@@ -109,7 +109,7 @@ static int __cdev_tx(
 	CSM_DP_DEBUG("%s: ch %s bus %d VF %d iov_nr %u sg %d\n",
 		__func__, ch_name(ch), pdev->bus_num, pdev->vf_num, iov_nr, sg);
 	if (iov_nr > CSM_DP_MAX_IOV_SIZE)
-		return  -E2BIG;
+		return -E2BIG;
 
 	if (copy_from_user(iov, (void __user *)uiov,
 				   sizeof(struct iovec) * iov_nr))
