@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * ​​​​Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  */
 
 #include <linux/init.h>
@@ -179,7 +179,8 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 	unsigned int type;
 	int ret;
 	unsigned int csm_dp_ul_buf_size = CSM_DP_DEFAULT_UL_BUF_SIZE;
-	unsigned int csm_dp_ul_buf_cnt = CSM_DP_DEFAULT_UL_BUF_CNT;
+	unsigned int csm_dp_ul_data_buf_cnt = CSM_DP_DEFAULT_UL_DATA_BUF_CNT;
+	unsigned int csm_dp_ul_ctrl_buf_cnt = CSM_DP_DEFAULT_UL_CTRL_BUF_CNT;
 
 	// TODO: add module params for ul_buf_size/cnt
 	if (csm_dp_ul_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
@@ -194,7 +195,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 		pdev,
 		CSM_DP_MEM_TYPE_UL_CONTROL,
 		csm_dp_ul_buf_size,
-		csm_dp_ul_buf_cnt,
+		csm_dp_ul_ctrl_buf_cnt,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_CONTROL memory pool!\n",
@@ -207,7 +208,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 		pdev,
 		CSM_DP_MEM_TYPE_UL_DATA,
 		csm_dp_ul_buf_size,
-		csm_dp_ul_buf_cnt,
+		csm_dp_ul_data_buf_cnt,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_DATA memory pool!\n",
@@ -335,6 +336,7 @@ int csm_dp_tx(
 int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 {
 	int ret;
+	unsigned int recv_rx_count_per_poll = 0;
 	struct csm_dp_buf_cntrl *cur_packet;
 	size_t n = 0, remain = iov_nr;
 
@@ -349,18 +351,25 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	 * poll to get packets from MHI. This will cause dl_xfer (RX callback) to get called which
 	 * will then link the Rx packets into pdrv->pending_packets
 	 */
-	ret = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
-	if (ret < 0) {
+	recv_rx_count_per_poll = mhi_poll(pdev->mhi_data_dev.mhi_dev, CSM_DP_NAPI_WEIGHT, DMA_FROM_DEVICE);
+	if (recv_rx_count_per_poll < 0) {
 		CSM_DP_LIMIT_ERROR("%s: Error:%d rx polling for bus:%d VF:%d %s\n",
-				   __func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
+				   __func__, recv_rx_count_per_poll, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
 		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
-		return ret;
+		return recv_rx_count_per_poll;
 	}
 
+	if (recv_rx_count_per_poll == 0) {
+		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
+		return 0;
+	}
+
+	/* Only replenish when packets are received from MHI*/
 	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
 	if (ret < 0)
-		CSM_DP_LIMIT_ERROR("%s: Error:%d rx replenish for bus:%d VF:%d %s\n",
-				   __func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
+		CSM_DP_LIMIT_ERROR(
+			"%s: Error:%d rx replenish for bus:%d VF:%d %s\n",
+			__func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
 
 	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 

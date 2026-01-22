@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * ​Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  *
  */
 
@@ -86,7 +86,7 @@ static int __mhi_rx_replenish(
 			       pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA];
 
 	ret = 0;
-	if (nr < mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / 8)
+	if (nr < mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / 4)
 		return ret;
 	for (; nr > 0;) {
 		to_xfer = min(CSM_DP_MAX_IOV_SIZE, nr);
@@ -95,7 +95,9 @@ static int __mhi_rx_replenish(
 								&c_offset);
 			if (buf == NULL) {
 				mhi->stats.rx_out_of_buf++;
-				CSM_DP_DEBUG("%s: out of rx buffer (nr %d to_xfer %d)!\n", __func__, nr, to_xfer);
+				CSM_DP_LIMIT_ERROR(
+					"%s: out of rx buffer (nr %d to_xfer %d)! processed buffer: %d\n",
+					__func__, nr, to_xfer, i);
 				to_xfer = i;
 				ret = -ENOMEM;
 				goto err;
@@ -591,7 +593,7 @@ static int csm_dp_mhi_probe(
 		ret = csm_dp_mhi_rx_replenish(mhi);
 		if (ret) {
 			CSM_DP_ERROR("%s: csm_dp_mhi_rx_replenish failed "
-				     "for for bus:%d VF:%d mhi chan %s dp chan %s\n",
+				     "for bus:%d VF:%d mhi chan %s dp chan %s\n",
 				     __func__, bus_num, vf_num, id->chan, ch_name(id->driver_data));
 			goto err;
 		}
@@ -640,6 +642,7 @@ static void csm_dp_mhi_remove(struct mhi_device *mhi_dev)
 		CSM_DP_DEBUG("%s: mhi_dev_refcnt %d\n", __func__, atomic_read(&mhi->mhi_dev_refcnt));
 		msleep(10);
 	}
+
 	mhi->mhi_dev = NULL;
 }
 

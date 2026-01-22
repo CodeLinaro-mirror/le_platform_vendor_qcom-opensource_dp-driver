@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * ​​​​Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  *
  */
 
@@ -582,7 +582,7 @@ static struct csm_dp_mempool *__csm_dp_mempool_alloc(
 		mempool->ring.loc.true_alloc_size;
 	csm_dp_mempool_init(mempool);
 
-	CSM_DP_DEBUG("%s: mempool is created, type=%u bufsz=%u bufcnt=%u\n",
+	CSM_DP_INFO("%s: mempool is created, type=%u bufsz=%u bufcnt=%u\n",
 		  __func__, type, buf_sz, buf_cnt);
 
 	return mempool;

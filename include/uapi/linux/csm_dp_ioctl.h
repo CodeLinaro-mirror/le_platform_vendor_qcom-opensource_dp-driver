@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * ​Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
  *
  */
 
@@ -102,7 +102,8 @@ enum csm_dp_rx_type {
 #define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
 
 #define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
-#define CSM_DP_DEFAULT_UL_BUF_CNT	2500
+#define CSM_DP_DEFAULT_UL_DATA_BUF_CNT	3000
+#define CSM_DP_DEFAULT_UL_CTRL_BUF_CNT	2500
 
 #define CSM_DP_INVALID_BUF_INDEX ((uint32_t)-1)
 
