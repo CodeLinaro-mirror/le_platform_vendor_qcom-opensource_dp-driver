@@ -22,6 +22,14 @@ static uint rx_queue_size = DEFAULT_RX_QUEUE_SIZE;
 module_param(rx_queue_size, uint, 0444);
 MODULE_PARM_DESC(rx_queue_size, " Rx queue size, default 1024");
 
+static uint ul_ctrl_buf_cnt = CSM_DP_DEFAULT_UL_CTRL_BUF_CNT;
+module_param(ul_ctrl_buf_cnt, uint, 0444);
+MODULE_PARM_DESC(ul_ctrl_buf_cnt, " UL CTRL buffer count, default 2500");
+
+static uint ul_data_buf_cnt = CSM_DP_DEFAULT_UL_DATA_BUF_CNT;
+module_param(ul_data_buf_cnt, uint, 0444);
+MODULE_PARM_DESC(ul_data_buf_cnt, " UL DATA buffer count, default 3000");
+
 static struct csm_dp_mhi *get_dp_mhi(struct csm_dp_dev *pdev, enum csm_dp_channel ch)
 {
 	switch (ch) {
@@ -181,6 +189,15 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 	unsigned int csm_dp_ul_buf_size = CSM_DP_DEFAULT_UL_BUF_SIZE;
 	unsigned int csm_dp_ul_data_buf_cnt = CSM_DP_DEFAULT_UL_DATA_BUF_CNT;
 	unsigned int csm_dp_ul_ctrl_buf_cnt = CSM_DP_DEFAULT_UL_CTRL_BUF_CNT;
+
+	/*
+	 * if 0 is passed as module parameter, default buf_cnt is used
+	 * otherwise the total mempool size is checked in csm_dp_mempool_alloc.
+	 */
+	if (ul_data_buf_cnt)
+		csm_dp_ul_data_buf_cnt = ul_data_buf_cnt;
+	if (ul_ctrl_buf_cnt)
+		csm_dp_ul_ctrl_buf_cnt = ul_ctrl_buf_cnt;
 
 	// TODO: add module params for ul_buf_size/cnt
 	if (csm_dp_ul_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
