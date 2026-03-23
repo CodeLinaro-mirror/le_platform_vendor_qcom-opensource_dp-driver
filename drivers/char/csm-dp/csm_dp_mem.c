@@ -395,7 +395,8 @@ static int csm_dp_mem_init(
 		rem_size = csm_dp_buf_true_size(mem) * rem_buf;
 	}
 	if (num_cl > MAX_CSM_DP_MEMPOOL_CLUSTERS) {
-		CSM_DP_ERROR("%s: mempool size too big. num_cl %d\n", __func__, num_cl);
+		CSM_DP_ERROR("%s: mempool size too big, cluster requested %d, max %ld \n",
+			__func__, num_cl, MAX_CSM_DP_MEMPOOL_CLUSTERS);
 		return -ENOMEM;
 	}
 	if (ULONG_MAX / CSM_DP_MEMPOOL_CLUSTER_SIZE < num_cl) {

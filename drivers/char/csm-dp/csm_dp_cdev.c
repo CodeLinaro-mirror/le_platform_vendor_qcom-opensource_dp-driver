@@ -807,6 +807,67 @@ static int csm_dp_cdev_mmap(struct file *file, struct vm_area_struct *vma)
 	return ret;
 }
 
+static void csm_dp_update_pid_name(struct csm_dp_dev *pdev)
+{
+	if (!pdev)
+		return;
+
+#if defined(CONFIG_ARM64)
+	/* Get process name from /proc cmdline as current->comm may be empty */
+	if (current && current->mm && current->mm->arg_start && current->mm->arg_end) {
+		unsigned long len = current->mm->arg_end - current->mm->arg_start;
+		char *cmdline;
+
+		if (len > PAGE_SIZE)
+			len = PAGE_SIZE;
+		if (len == 0)
+			return;
+
+		cmdline = kmalloc(len + 1, GFP_KERNEL);
+		if (cmdline) {
+			int res = access_process_vm(current,
+				current->mm->arg_start, cmdline, len, 0);
+			if (res > 0) {
+				int i;
+				char *basename;
+				/* Ensure not to exceed buffer bounds */
+				if (res > len)
+					res = len;
+
+				/* Find first null or space to get just the command name */
+				for (i = 0; i < res; i++) {
+					if (cmdline[i] == '\0' ||
+							cmdline[i] == '\n' || cmdline[i] == ' ')
+						break;
+				}
+				cmdline[i] = '\0';
+
+				/* Extract basename from the full path */
+				basename = strrchr(cmdline, '/');
+				if (basename && *(basename + 1) != '\0') {
+					/* Copy just the basename */
+					strlcpy(pdev->pid_name, basename + 1, sizeof(pdev->pid_name));
+				} else {
+					/* No path separator, use the whole command */
+					strlcpy(pdev->pid_name, cmdline, sizeof(pdev->pid_name));
+				}
+			}
+			kfree(cmdline);
+		}
+	}
+
+	/* Fallback to current->comm if cmdline didn't work */
+	if (pdev->pid_name[0] == '\0') {
+		if (current->group_leader && current->group_leader->comm[0] != '\0')
+			strlcpy(pdev->pid_name, current->group_leader->comm, sizeof(pdev->pid_name));
+		else
+			strlcpy(pdev->pid_name, current->comm, sizeof(pdev->pid_name));
+	}
+#else
+	strlcpy(pdev->pid_name, current->comm, sizeof(pdev->pid_name));
+#endif
+}
+
 static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 {
 	struct csm_dp_dev *pdev = container_of(inode->i_cdev,
@@ -825,7 +886,7 @@ static int csm_dp_cdev_open(struct inode *inode, struct file *file)
 
 	cdev->pid = current->tgid;
 	pdev->pid = cdev->pid;
-	strncpy(pdev->pid_name, current->comm, TASK_COMM_LEN);
+	csm_dp_update_pid_name(pdev);
 	cdev->pdev = pdev;
 
 	__cdev_init_mempool_vma(cdev);

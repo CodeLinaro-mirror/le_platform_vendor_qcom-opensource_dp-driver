@@ -13,7 +13,16 @@
 
 struct csm_dp_drv;
 
-#define MAX_CSM_DP_MEMPOOL_SIZE ((long)1024 * 1024 * 1024 * 16)
+/**
+ * Architecture-specific configuration selection, reduced memory footprint for ARM64
+ */
+#if defined(CONFIG_ARM64)
+#define MAX_CSM_DP_MEMPOOL_SIZE ((long)1024 * 1024 * 1024 * 2)  // 2GB for ARM
+#elif defined(CONFIG_X86_64)
+#define MAX_CSM_DP_MEMPOOL_SIZE ((long)1024 * 1024 * 1024 * 16) // 16GB X86
+#else
+#define MAX_CSM_DP_MEMPOOL_SIZE ((long)1024 * 1024 * 1024 * 16) // 16GB default
+#endif
 #define CSM_DP_MEMPOOL_CLUSTER_SIZE (1024 * 1024 * 2)  /* must be > CSM_DP_MAX_DL_MSG_LEN */
 #define CSM_DP_MEMPOOL_CLUSTER_SHIFT 21
 #define CSM_DP_MEMPOOL_CLUSTER_MASK (CSM_DP_MEMPOOL_CLUSTER_SIZE - 1)

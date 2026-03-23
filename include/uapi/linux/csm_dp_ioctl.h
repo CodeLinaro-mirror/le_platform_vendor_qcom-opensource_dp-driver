@@ -97,11 +97,21 @@ enum csm_dp_rx_type {
 /*
  * maximum mtu size for CSM DP application, including csm_dp header
  * Note, need to make sure both sides in sync between Host and Q6
+ *
+ * Architecture-specific configuration selection, reduced memory footprint for ARM64
  */
+#if defined(__aarch64__) || defined(__arm64__) || defined(CONFIG_ARM64)
+#define CSM_DP_MAX_DL_MSG_LEN   ((384 * 1024) - CSM_DP_L1_CACHE_BYTES)
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	((384 * 1024) - CSM_DP_L1_CACHE_BYTES)
+#elif defined(__x86_64__) || defined(CONFIG_X86_64)
 #define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
+#else
+#define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
+#endif
 #define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
 
-#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
 #define CSM_DP_DEFAULT_UL_DATA_BUF_CNT	3000
 #define CSM_DP_DEFAULT_UL_CTRL_BUF_CNT	2500
 
