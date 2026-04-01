@@ -950,6 +950,28 @@ void get_mempool_buf_status(struct csm_dp_mempool *mempool)
         }
 }
 
+/*
+ * Returns the number of buffers currently available in the ring buffer
+ */
+unsigned int csm_dp_mempool_get_free_count(
+	struct csm_dp_mempool *mempool)
+{
+	csm_dp_ring_index_t prod_tail, cons_tail;
+	unsigned int mask;
+
+	if (unlikely(mempool == NULL))
+		return 0;
+
+	/* Ensure we get the latest updates */
+	rmb();
+	prod_tail = *mempool->ring.prod_tail;
+	cons_tail = *mempool->ring.cons_tail;
+	mask = mempool->ring.size - 1;
+
+	/* Available buffers = (producer - consumer) & mask */
+	return (prod_tail - cons_tail) & mask;
+}
+
 void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe)
 {
 	struct csm_dp_dev *pdev = mempool->dp_dev;

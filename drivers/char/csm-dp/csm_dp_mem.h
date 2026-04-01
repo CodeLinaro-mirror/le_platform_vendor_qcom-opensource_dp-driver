@@ -119,6 +119,7 @@ void *csm_dp_mempool_get_buf(struct csm_dp_mempool *mempool,
 		unsigned int *cluster, unsigned int *c_offset);
 void get_mempool_buf_status(struct csm_dp_mempool *mempool);
 void free_rx_ring_buffers(struct csm_dp_mempool *mempool, bool probe);
+unsigned int csm_dp_mempool_get_free_count(struct csm_dp_mempool *mempool);
 
 static inline bool csm_dp_mempool_hold(struct csm_dp_mempool *mempool)
 {

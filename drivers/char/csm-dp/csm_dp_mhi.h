@@ -12,7 +12,8 @@
 #include <linux/slab.h>
 #include <linux/local_mhi.h>
 
-#define CSM_DP_MHI_NAME	"csm-l1rf-mhi"
+#define CSM_DP_MHI_NAME	"csm-fapi-mhi"
+#define CSM_DP_RX_BUF_ADAPTIVE_THRSHOLD_FACTOR 4
 
 struct csm_dp_drv;
 

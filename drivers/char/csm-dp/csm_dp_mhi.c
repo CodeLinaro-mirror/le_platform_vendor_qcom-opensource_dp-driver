@@ -72,27 +72,62 @@ EXPORT_SYMBOL(csm_dp_hex_dump);
 static int __mhi_rx_replenish(
 	struct csm_dp_mhi *mhi)
 {
-	struct mhi_device *mhi_dev = mhi->mhi_dev;
-	struct csm_dp_dev *pdev = dev_get_drvdata(&mhi_dev->dev);
+	struct mhi_device *mhi_dev;
+	struct csm_dp_dev *pdev;
 	struct csm_dp_mempool *mempool;
-	int nr = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
+	int nr;
 	void *buf;
-	int ret, i, to_xfer;
-	bool is_control = (mhi_dev->id->driver_data == CSM_DP_CH_CONTROL);
+	int ret = 0, i, to_xfer;
+	int nr_avail_bufs, nr_total_bufs, threshold;
+	bool is_control;
 	unsigned int cluster, c_offset;
 	struct csm_dp_buf_cntrl *first_buf_cntrl = NULL, *buf_cntrl = NULL, *prev_buf_cntrl = NULL;
+
+
+	if (!mhi || !mhi->mhi_dev) {
+		CSM_DP_ERROR("%s: Invalid mhi or mhi_dev\n", __func__);
+		return -EINVAL;
+	}
+
+	mhi_dev = mhi->mhi_dev;
+	pdev = dev_get_drvdata(&mhi_dev->dev);
+	nr = mhi_get_free_desc_count(mhi_dev, DMA_FROM_DEVICE);
+	is_control = (mhi_dev->id->driver_data == CSM_DP_CH_CONTROL);
 
 	mempool = is_control ? pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] :
 			       pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA];
 
-	ret = 0;
-	if (nr < mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / 4)
+	if (!mempool) {
+		CSM_DP_LIMIT_ERROR("%s: UL %s mempool not available\n",
+			__func__, is_control ? "CONTROL" : "DATA");
+		return -ENODEV;
+	}
+
+	/* Get total buffer count */
+	nr_total_bufs = mempool->mem.buf_cnt;
+
+	/* Calculate adaptive threshold */
+	threshold = min(nr_total_bufs / CSM_DP_RX_BUF_ADAPTIVE_THRSHOLD_FACTOR,
+		mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / CSM_DP_RX_BUF_ADAPTIVE_THRSHOLD_FACTOR);
+
+	/* Use adaptive threshold */
+	if ((threshold < 1) || (nr < threshold))
 		return ret;
+
+	/* Get available free buffers */
+	nr_avail_bufs = csm_dp_mempool_get_free_count(mempool);
+
+	/* Reject if available buffers < threshold */
+	if (nr_avail_bufs < threshold)
+		return ret;
+
+	/* Limit replenishment by available buffers */
+	nr = min(nr, nr_avail_bufs);
+
 	for (; nr > 0;) {
 		to_xfer = min(CSM_DP_MAX_IOV_SIZE, nr);
 		for (i = 0; i < to_xfer; i++) {
-			buf = csm_dp_mempool_get_buf(mempool, &cluster,
-								&c_offset);
+			buf = csm_dp_mempool_get_buf(mempool, &cluster, &c_offset);
 			if (buf == NULL) {
 				mhi->stats.rx_out_of_buf++;
 				CSM_DP_LIMIT_ERROR(
