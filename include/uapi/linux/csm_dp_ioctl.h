@@ -35,7 +35,7 @@
 #define CSM_DP_IOCTL_SG_TX		\
 		_IOWR(CSM_DP_IOCTL_BASE, 5, struct csm_dp_ioctl_tx)
 
-/* obsolete */
+/* obsolete start */
 #define CSM_DP_IOCTL_TX_MODE_CONFIG	\
 		_IOWR(CSM_DP_IOCTL_BASE, 6, unsigned int)
 
@@ -44,6 +44,11 @@
 
 #define CSM_DP_IOCTL_GET_STATS	\
 		_IOWR(CSM_DP_IOCTL_BASE, 8, struct csm_dp_ioctl_getstats)
+/* obsolete end */
+
+/* New ioctl to get active memory profile */
+#define CSM_DP_IOCTL_GET_PROFILE \
+		_IOR(CSM_DP_IOCTL_BASE, 9, unsigned int)
 
 #define CSM_DP_IOCTL_TX_FLAG_MIRROR 0x1
 
@@ -255,11 +260,11 @@ static inline int csm_dp_mem_type_is_valid(enum csm_dp_mem_type type)
 static inline const char *csm_dp_mem_type_to_str(enum csm_dp_mem_type type)
 {
 	switch (type) {
-	case CSM_DP_MEM_TYPE_DL_CONTROL: return "DL_CTRL";
-	case CSM_DP_MEM_TYPE_DL_DATA: return "DL_DATA";
-	case CSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
-	case CSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
-	default: return "unknown";
+		case CSM_DP_MEM_TYPE_DL_CONTROL: return "DL_CTRL";
+		case CSM_DP_MEM_TYPE_DL_DATA: return "DL_DATA";
+		case CSM_DP_MEM_TYPE_UL_CONTROL: return "UL_CTRL";
+		case CSM_DP_MEM_TYPE_UL_DATA: return "UL_DATA";
+		default: return "unknown";
 	}
 }
 
@@ -271,9 +276,9 @@ static inline int csm_dp_mmap_type_is_valid(enum csm_dp_mmap_type type)
 static inline const char *csm_dp_mmap_type_to_str(enum csm_dp_mmap_type type)
 {
 	switch (type) {
-	case CSM_DP_MMAP_TYPE_MEM: return "Memory";
-	case CSM_DP_MMAP_TYPE_RING: return "Ring";
-	default: return "unknown";
+		case CSM_DP_MMAP_TYPE_MEM: return "Memory";
+		case CSM_DP_MMAP_TYPE_RING: return "Ring";
+		default: return "unknown";
 	}
 }
 
@@ -285,33 +290,33 @@ static inline int csm_dp_rx_type_is_valid(enum csm_dp_rx_type type)
 static inline const char *csm_dp_rx_type_to_str(enum csm_dp_rx_type type)
 {
 	switch (type) {
-	case CSM_DP_RX_TYPE_FAPI: return "FAPI";
-	default: return "unknown";
+		case CSM_DP_RX_TYPE_FAPI: return "FAPI";
+		default: return "unknown";
 	}
 }
 
 static inline const char *csm_dp_buf_state_to_str(enum csm_dp_buf_state state)
 {
 	switch (state) {
-	case CSM_DP_BUF_STATE_KERNEL_FREE:
-		return "KERNEL FREE";
-	case CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA:
-		return "KERNEL ALLOC RECV DMA";
-	case CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP:
-		return "KERNEL RECV CMP MSGQ TO APP";
-	case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA:
-		return "KERNEL XMIT DMA";
-	case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP:
-		return "KERNEL XMIT DMA COMP";
-	case CSM_DP_BUF_STATE_USER_FREE:
-		return "USER FREE";
-	case CSM_DP_BUF_STATE_USER_ALLOC:
-		return "USER ALLOC";
-	case CSM_DP_BUF_STATE_USER_RECV:
-		return "USER RECV";
-	case CSM_DP_BUF_STATE_LAST:
-	default:
-		return "unknown";
+		case CSM_DP_BUF_STATE_KERNEL_FREE:
+			return "KERNEL FREE";
+		case CSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA:
+			return "KERNEL ALLOC RECV DMA";
+		case CSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP:
+			return "KERNEL RECV CMP MSGQ TO APP";
+		case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA:
+			return "KERNEL XMIT DMA";
+		case CSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP:
+			return "KERNEL XMIT DMA COMP";
+		case CSM_DP_BUF_STATE_USER_FREE:
+			return "USER FREE";
+		case CSM_DP_BUF_STATE_USER_ALLOC:
+			return "USER ALLOC";
+		case CSM_DP_BUF_STATE_USER_RECV:
+			return "USER RECV";
+		case CSM_DP_BUF_STATE_LAST:
+		default:
+			return "unknown";
 	};
 }
 
@@ -323,6 +328,118 @@ static inline bool csm_dp_mem_type_is_ul(enum csm_dp_mem_type type)
 static inline bool csm_dp_mem_type_is_dl(enum csm_dp_mem_type type)
 {
 	return type == CSM_DP_MEM_TYPE_DL_CONTROL || type == CSM_DP_MEM_TYPE_DL_DATA;
+}
+
+/*
+ * ============================================================================
+ * Memory Profile Definitions
+ * ============================================================================
+ */
+
+/* Memory profile identifiers */
+enum csm_dp_memory_profile {
+	CSM_DP_PROFILE_LOW_MEMORY = 0,
+	CSM_DP_PROFILE_BALANCED = 1,
+	CSM_DP_PROFILE_HIGH_PERFORMANCE = 2,
+	CSM_DP_PROFILE_MAX
+};
+
+/* Profile configuration structure */
+struct csm_dp_profile_params {
+	__u32 ul_ctrl_buf_size;
+	__u32 ul_ctrl_buf_count;
+	__u32 ul_data_buf_size;
+	__u32 ul_data_buf_count;
+};
+
+/* Platform-specific profile definitions */
+#if defined(__aarch64__) || defined(__arm64__) || defined(CONFIG_ARM64)
+	/* ARM64 profiles - optimized for embedded systems */
+	#define CSM_DP_PROFILES_INIT { \
+		[CSM_DP_PROFILE_LOW_MEMORY] = { \
+			.ul_ctrl_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_ctrl_buf_count = 1500, \
+			.ul_data_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_data_buf_count = 2500, \
+		}, \
+		[CSM_DP_PROFILE_BALANCED] = { \
+			.ul_ctrl_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_ctrl_buf_count = 2500, \
+			.ul_data_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_data_buf_count = 3000, \
+		}, \
+		[CSM_DP_PROFILE_HIGH_PERFORMANCE] = { \
+			.ul_ctrl_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_ctrl_buf_count = 4000, \
+			.ul_data_buf_size = (384 * 1024) - CSM_DP_L1_CACHE_BYTES, \
+			.ul_data_buf_count = 5000, \
+		} \
+	}
+#elif defined(__x86_64__) || defined(CONFIG_X86_64)
+	/* x86_64 profiles - optimized for server systems */
+	#define CSM_DP_PROFILES_INIT { \
+		[CSM_DP_PROFILE_LOW_MEMORY] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 1500, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 2500, \
+		}, \
+		[CSM_DP_PROFILE_BALANCED] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 2500, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 3000, \
+		}, \
+		[CSM_DP_PROFILE_HIGH_PERFORMANCE] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 4000, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 5000, \
+		} \
+	}
+#else
+	/* Default to x86_64 values for other platforms */
+	#define CSM_DP_PROFILES_INIT { \
+		[CSM_DP_PROFILE_LOW_MEMORY] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 1500, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 2500, \
+		}, \
+		[CSM_DP_PROFILE_BALANCED] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 2500, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 3000, \
+		}, \
+		[CSM_DP_PROFILE_HIGH_PERFORMANCE] = { \
+			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_count = 4000, \
+			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_count = 5000, \
+		} \
+	}
+#endif
+
+/* Helper function to get profile name */
+static inline const char *csm_dp_profile_name(enum csm_dp_memory_profile profile)
+{
+	switch (profile) {
+	case CSM_DP_PROFILE_LOW_MEMORY:
+		return "LOW_MEMORY";
+	case CSM_DP_PROFILE_BALANCED:
+		return "BALANCED";
+	case CSM_DP_PROFILE_HIGH_PERFORMANCE:
+		return "HIGH_PERFORMANCE";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+/* Helper function to validate profile */
+static inline bool csm_dp_profile_is_valid(int profile)
+{
+	return (profile >= CSM_DP_PROFILE_LOW_MEMORY && profile < CSM_DP_PROFILE_MAX);
 }
 
 #endif /* __CSM_DP_IOCTL_H__ */

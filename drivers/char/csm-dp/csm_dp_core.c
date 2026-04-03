@@ -22,13 +22,30 @@ static uint rx_queue_size = DEFAULT_RX_QUEUE_SIZE;
 module_param(rx_queue_size, uint, 0444);
 MODULE_PARM_DESC(rx_queue_size, " Rx queue size, default 1024");
 
-static uint ul_ctrl_buf_cnt = CSM_DP_DEFAULT_UL_CTRL_BUF_CNT;
-module_param(ul_ctrl_buf_cnt, uint, 0444);
-MODULE_PARM_DESC(ul_ctrl_buf_cnt, " UL CTRL buffer count, default 2500");
+/* Platform-specific default profile */
+#if defined(CONFIG_ARM64)
+	/* ARM64: Default to LOW_MEMORY for embedded systems */
+	#define CSM_DP_DEFAULT_PROFILE CSM_DP_PROFILE_BALANCED
+#elif defined(CONFIG_X86_64)
+	/* x86_64: Default to BALANCED for server systems */
+	#define CSM_DP_DEFAULT_PROFILE CSM_DP_PROFILE_HIGH_PERFORMANCE
+#else
+	/* Other platform: Default to BALANCED */
+	#define CSM_DP_DEFAULT_PROFILE CSM_DP_PROFILE_BALANCED
+#endif
 
-static uint ul_data_buf_cnt = CSM_DP_DEFAULT_UL_DATA_BUF_CNT;
-module_param(ul_data_buf_cnt, uint, 0444);
-MODULE_PARM_DESC(ul_data_buf_cnt, " UL DATA buffer count, default 3000");
+/* Memory profile module parameter with platform-specific default */
+static int memory_profile = CSM_DP_DEFAULT_PROFILE;
+module_param(memory_profile, int, 0444);
+MODULE_PARM_DESC(memory_profile,
+	"Memory profile: 0=low_memory, 1=balanced, 2=high_performance");
+
+/* Global profile table */
+static const struct csm_dp_profile_params csm_dp_profiles[CSM_DP_PROFILE_MAX] =
+	CSM_DP_PROFILES_INIT;
+
+/* Active profile */
+static enum csm_dp_memory_profile active_profile __read_mostly = CSM_DP_DEFAULT_PROFILE;
 
 static struct csm_dp_mhi *get_dp_mhi(struct csm_dp_dev *pdev, enum csm_dp_channel ch)
 {
@@ -186,33 +203,48 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 {
 	unsigned int type;
 	int ret;
-	unsigned int csm_dp_ul_buf_size = CSM_DP_DEFAULT_UL_BUF_SIZE;
-	unsigned int csm_dp_ul_data_buf_cnt = CSM_DP_DEFAULT_UL_DATA_BUF_CNT;
-	unsigned int csm_dp_ul_ctrl_buf_cnt = CSM_DP_DEFAULT_UL_CTRL_BUF_CNT;
+	const struct csm_dp_profile_params *profile;
+	enum csm_dp_memory_profile current_profile;
 
-	/*
-	 * if 0 is passed as module parameter, default buf_cnt is used
-	 * otherwise the total mempool size is checked in csm_dp_mempool_alloc.
-	 */
-	if (ul_data_buf_cnt)
-		csm_dp_ul_data_buf_cnt = ul_data_buf_cnt;
-	if (ul_ctrl_buf_cnt)
-		csm_dp_ul_ctrl_buf_cnt = ul_ctrl_buf_cnt;
+	/* Validate profile before accessing array */
+	current_profile = READ_ONCE(active_profile);
+	if (!csm_dp_profile_is_valid(current_profile)) {
+		CSM_DP_ERROR("%s: Invalid active profile %d, using balanced\n",
+		__func__, current_profile);
+		current_profile = CSM_DP_PROFILE_BALANCED;
+		WRITE_ONCE(active_profile, current_profile);
+	}
+	profile = &csm_dp_profiles[current_profile];
 
-	// TODO: add module params for ul_buf_size/cnt
-	if (csm_dp_ul_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
-		CSM_DP_ERROR("%s: UL buffer size %d exceeds limit %d\n",
+	/* Use profile settings for UL buffer allocation */
+	pr_info("CSM-DP: using memory profile %s: UL_CTRL=%uKBx%u, UL_DATA=%uKBx%u\n",
+		csm_dp_profile_name(current_profile),
+		profile->ul_ctrl_buf_size / 1024, profile->ul_ctrl_buf_count,
+		profile->ul_data_buf_size / 1024, profile->ul_data_buf_count);
+
+	/* Validate buffer sizes */
+	if (profile->ul_ctrl_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
+		CSM_DP_ERROR("%s: UL_CONTROL buffer size %u exceeds limit %d\n",
 			__func__,
-			csm_dp_ul_buf_size,
+			profile->ul_ctrl_buf_size,
 			CSM_DP_MAX_UL_MSG_LEN);
 		return -ENOMEM;
 	}
 
+	if (profile->ul_data_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
+		CSM_DP_ERROR("%s: UL_DATA buffer size %u exceeds limit %d\n",
+			__func__,
+			profile->ul_data_buf_size,
+			CSM_DP_MAX_UL_MSG_LEN);
+		return -ENOMEM;
+	}
+
+	/* Allocate UL_CONTROL with profile settings */
 	pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] = csm_dp_mempool_alloc(
 		pdev,
 		CSM_DP_MEM_TYPE_UL_CONTROL,
-		csm_dp_ul_buf_size,
-		csm_dp_ul_ctrl_buf_cnt,
+		profile->ul_ctrl_buf_size,
+		profile->ul_ctrl_buf_count,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_CONTROL memory pool!\n",
@@ -220,12 +252,12 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 		return -ENOMEM;
 	}
 
-	/* TODO: use different buf_size & cnt for UL_DATA */
+	/* Allocate UL_DATA with profile settings */
 	pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA] = csm_dp_mempool_alloc(
 		pdev,
 		CSM_DP_MEM_TYPE_UL_DATA,
-		csm_dp_ul_buf_size,
-		csm_dp_ul_data_buf_cnt,
+		profile->ul_data_buf_size,
+		profile->ul_data_buf_count,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_DATA memory pool!\n",
@@ -606,9 +638,22 @@ static int csm_dp_remove(void)
 	return 0;
 }
 
+/* Function to get active profile (for ioctl) */
+enum csm_dp_memory_profile csm_dp_get_active_profile(void)
+{
+	return READ_ONCE(active_profile);
+}
+
 static int __init csm_dp_module_init(void)
 {
-	pr_info("csm_dp_module_init\n");
+	pr_info("CSM-DP: module_init\n");
+
+	/* Validate and set RX memory profile */
+	if (!csm_dp_profile_is_valid(memory_profile)) {
+		pr_warn("CSM-DP: Invalid memory profile %d, using default\n", memory_profile);
+		WRITE_ONCE(active_profile, CSM_DP_DEFAULT_PROFILE);
+	} else
+		WRITE_ONCE(active_profile, memory_profile);
 
 	return csm_dp_probe();
 }
@@ -616,7 +661,7 @@ module_init(csm_dp_module_init);
 
 static void __exit csm_dp_module_exit(void)
 {
-	pr_info("csm_dp_module_exit\n");
+	pr_info("CSM-DP: module_exit\n");
 
 	csm_dp_remove();
 }

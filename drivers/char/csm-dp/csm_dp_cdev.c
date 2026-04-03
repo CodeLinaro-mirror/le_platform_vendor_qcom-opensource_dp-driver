@@ -387,6 +387,27 @@ static int __cdev_ioctl_get_stats(struct csm_dp_cdev *cdev, unsigned long ioarg)
 	return 0;
 }
 
+static int __cdev_ioctl_get_profile(unsigned long ioarg)
+{
+	unsigned int profile;
+
+	/* Get active profile from core module */
+	profile = csm_dp_get_active_profile();
+
+	/* Validate profile before returning to userspace */
+	if (!csm_dp_profile_is_valid(profile)) {
+		CSM_DP_ERROR("%s: Invalid profile %u detected\n", __func__, profile);
+		return -EINVAL;
+	}
+
+	if (copy_to_user((void __user *)ioarg, &profile, sizeof(profile))) {
+		CSM_DP_ERROR("%s: copy_to_user failed\n", __func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
 static unsigned int csm_dp_cdev_poll(struct file *file, poll_table *wait)
 {
 	struct csm_dp_cdev *cdev = (struct csm_dp_cdev *)file->private_data;
@@ -459,6 +480,9 @@ static long csm_dp_cdev_ioctl(
 		break;
 	case CSM_DP_IOCTL_GET_STATS:
 		ret = __cdev_ioctl_get_stats(cdev, ioarg);
+		break;
+	case CSM_DP_IOCTL_GET_PROFILE:
+		ret = __cdev_ioctl_get_profile(ioarg);
 		break;
 	default:
 		break;
@@ -962,7 +986,7 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 {
 	int ret;
 
-	CSM_DP_INFO("%s: start\n", __func__);
+	CSM_DP_INFO("CSM-DP: cdev_init start\n");
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
 	/* Kernel 6.4+ removed the owner parameter from class_create() */
