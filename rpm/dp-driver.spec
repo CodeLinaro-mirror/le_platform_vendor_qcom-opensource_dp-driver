@@ -46,7 +46,10 @@ mkdir -p $RPM_BUILD_ROOT%{_includedir}/linux
 install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/include/uapi/linux/csm_dp_ioctl.h $RPM_BUILD_ROOT%{_includedir}/linux
 
 mkdir -p %{buildroot}%{_sysconfdir}/modules-load.d
-install -m 755 %{_sourcedir}/%{package_name}-%{version}/dp-driver/modules-load.d/dp-driver.conf %{buildroot}%{_sysconfdir}/modules-load.d/dp-driver.conf
+install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/modules-load.d/dp-driver.conf %{buildroot}%{_sysconfdir}/modules-load.d/dp-driver.conf
+
+mkdir -p %{buildroot}%{_sysconfdir}/modprobe.d
+install -m 644 %{_sourcedir}/%{package_name}-%{version}/dp-driver/modprobe.d/dp-driver.conf %{buildroot}%{_sysconfdir}/modprobe.d/dp-driver.conf
 
 %clean
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
@@ -80,6 +83,7 @@ exit 0
 %{_datarootdir}/%{package_name}/
 %{_includedir}/linux/csm_dp_ioctl.h
 %config %{_sysconfdir}/modules-load.d/dp-driver.conf
+%config %{_sysconfdir}/modprobe.d/dp-driver.conf
 
 %changelog
 * %(date "+%a %b %d %Y") %packager %{version}-%{release}
