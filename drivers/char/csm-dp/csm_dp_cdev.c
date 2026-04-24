@@ -964,9 +964,11 @@ int csm_dp_cdev_init(struct csm_dp_drv *pdrv)
 
 	CSM_DP_INFO("%s: start\n", __func__);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,8,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0)
+	/* Kernel 6.4+ removed the owner parameter from class_create() */
 	pdrv->dev_class = class_create(CSM_DP_DEV_CLASS_NAME);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
+	/* Kernel 4.18 to 6.3: class_create(owner, name) */
 	pdrv->dev_class = class_create(THIS_MODULE, CSM_DP_DEV_CLASS_NAME);
 #endif
 	if (IS_ERR_OR_NULL(pdrv->dev_class)) {
