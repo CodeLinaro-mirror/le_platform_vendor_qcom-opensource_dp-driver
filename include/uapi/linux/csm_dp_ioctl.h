@@ -110,10 +110,10 @@ enum csm_dp_rx_type {
 #define CSM_DP_DEFAULT_UL_BUF_SIZE	((384 * 1024) - CSM_DP_L1_CACHE_BYTES)
 #elif defined(__x86_64__) || defined(CONFIG_X86_64)
 #define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
-#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	((512 * 1024) - CSM_DP_L1_CACHE_BYTES)
 #else
 #define CSM_DP_MAX_DL_MSG_LEN   ((2 * 1024 * 1024) - CSM_DP_L1_CACHE_BYTES)
-#define CSM_DP_DEFAULT_UL_BUF_SIZE	(512 * 1024)
+#define CSM_DP_DEFAULT_UL_BUF_SIZE	((512 * 1024) - CSM_DP_L1_CACHE_BYTES)
 #endif
 #define CSM_DP_MAX_UL_MSG_LEN   CSM_DP_MAX_DL_MSG_LEN
 
@@ -379,21 +379,21 @@ struct csm_dp_profile_params {
 	/* x86_64 profiles - optimized for server systems */
 	#define CSM_DP_PROFILES_INIT { \
 		[CSM_DP_PROFILE_LOW_MEMORY] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 1500, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 2500, \
 		}, \
 		[CSM_DP_PROFILE_BALANCED] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 2500, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 3000, \
 		}, \
 		[CSM_DP_PROFILE_HIGH_PERFORMANCE] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 4000, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 5000, \
 		} \
 	}
@@ -401,21 +401,21 @@ struct csm_dp_profile_params {
 	/* Default to x86_64 values for other platforms */
 	#define CSM_DP_PROFILES_INIT { \
 		[CSM_DP_PROFILE_LOW_MEMORY] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 1500, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 2500, \
 		}, \
 		[CSM_DP_PROFILE_BALANCED] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 2500, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 3000, \
 		}, \
 		[CSM_DP_PROFILE_HIGH_PERFORMANCE] = { \
-			.ul_ctrl_buf_size = 512 * 1024, \
+			.ul_ctrl_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_ctrl_buf_count = 4000, \
-			.ul_data_buf_size = 512 * 1024, \
+			.ul_data_buf_size = (512 * 1024) - CSM_DP_L1_CACHE_BYTES, \
 			.ul_data_buf_count = 5000, \
 		} \
 	}
