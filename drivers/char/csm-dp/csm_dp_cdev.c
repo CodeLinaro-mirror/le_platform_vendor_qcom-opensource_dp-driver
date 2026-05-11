@@ -864,7 +864,7 @@ static void csm_dp_update_pid_name(struct csm_dp_dev *pdev)
 			strlcpy(pdev->pid_name, current->comm, sizeof(pdev->pid_name));
 	}
 #else
-	strlcpy(pdev->pid_name, current->comm, sizeof(pdev->pid_name));
+	snprintf(pdev->pid_name, sizeof(pdev->pid_name), "%s", current->comm);
 #endif
 }
 
