@@ -552,6 +552,9 @@ static int csm_dp_core_init(struct csm_dp_drv *pdrv)
 		/* Kernel 6.1+: use netif_napi_add_weight() */
 		netif_napi_add_weight(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
 							CSM_DP_NAPI_WEIGHT);
+#elif (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 8))
+		netif_napi_add_weight(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
+							CSM_DP_NAPI_WEIGHT);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
 		/* Kernel 4.18-6.0: netif_napi_add() with 4 parameters */
 		netif_napi_add(&pdev->dummy_dev, &pdev->napi, csm_dp_poll,
