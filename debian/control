@@ -1,5 +1,5 @@
 Source: dp-driver
-Maintainer: Sivareddy Surasani <ssurasan@qti.qualcomm.com>
+Maintainer: Upal Kumar Saha <usaha@qti.qualcomm.com>
 Build-Depends: debhelper-compat (= 12)
 
 Package: dp-driver
