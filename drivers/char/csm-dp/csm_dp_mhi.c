@@ -117,9 +117,10 @@ static int __mhi_rx_replenish(
 	/* Get available free buffers */
 	nr_avail_bufs = csm_dp_mempool_get_free_count(mempool);
 
-	/* Reject if available buffers < threshold */
+	/* Reject if available buffers < threshold to avoid replenish failures.
+	 * Return -ENOMEM so caller schedules alloc_work to retry later. */
 	if (nr_avail_bufs < threshold)
-		return ret;
+		return -ENOMEM;
 
 	/* Limit replenishment by available buffers */
 	nr = min(nr, nr_avail_bufs);
