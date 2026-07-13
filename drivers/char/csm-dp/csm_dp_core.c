@@ -426,6 +426,7 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 	cur_packet = pdev->pending_packets;
 	while (cur_packet) {
 		struct csm_dp_buf_cntrl *cur_buf, *tmp;
+		uint16_t frag;
 
 		if (cur_packet->buf_count > remain) {
 			if (cur_packet == pdev->pending_packets)
@@ -434,7 +435,9 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 			break;
 		}
 
-		for (cur_buf = cur_packet; cur_buf; cur_buf = cur_buf->next) {
+		for (cur_buf = cur_packet, frag = 0;
+		     cur_buf && frag < cur_packet->buf_count;
+		     cur_buf = cur_buf->next, frag++) {
 			unsigned int cl;
 			struct csm_dp_mempool *mempool = pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA];
 
