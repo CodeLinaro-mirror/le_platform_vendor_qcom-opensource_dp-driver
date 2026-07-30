@@ -1,6 +1,7 @@
 #!/bin/sh
 
 if [ "$1" = "configure" ]; then
+    dkms remove -m dp-driver -v 1.0 --all > /dev/null 2>&1 || true
     dkms add -m dp-driver -v 1.0 || exit 1
     dkms build -m dp-driver -v 1.0 || exit 1
     dkms install -m dp-driver -v 1.0 || exit 1
