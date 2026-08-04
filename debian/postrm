@@ -4,7 +4,15 @@ if lsmod | grep -q csm_dp; then
     modprobe -r csm_dp || true
 fi
 
-rm -rf /var/lib/dkms/dp-driver/
-rm -rf /usr/src/dp-driver-1.0
-rm -f /usr/include/linux/csm_dp_ioctl.h
-rm -f /lib/modules/`uname -r`/updates/dkms/csm_dp.ko.zst
+case "$1" in
+    remove|purge)
+        dkms remove -m dp-driver -v 1.0 --all >/dev/null 2>&1 || true
+        rm -rf /var/lib/dkms/dp-driver
+        rm -rf /usr/src/dp-driver-1.0
+        rm -f /usr/include/linux/csm_dp_ioctl.h
+        ;;
+
+    upgrade)
+        # Reinstall/upgrade path
+        ;;
+esac
