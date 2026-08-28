@@ -22,6 +22,28 @@ static uint rx_queue_size = DEFAULT_RX_QUEUE_SIZE;
 module_param(rx_queue_size, uint, 0444);
 MODULE_PARM_DESC(rx_queue_size, " Rx queue size, default 1024");
 
+static uint ul_data_buf_cnt_override[CSM_DP_MAX_NUM_DEVS];
+static unsigned int ul_data_buf_cnt_override_len;
+module_param_array(ul_data_buf_cnt_override, uint, &ul_data_buf_cnt_override_len, 0444);
+MODULE_PARM_DESC(ul_data_buf_cnt_override,
+	"Override UL_DATA buf_cnt per VF, 0 or absent: no-overriding, other: override.\n"
+	"  Example: 'ul_data_buf_cnt_override=0,512,1024':\n"
+	"    VF1: take default setting\n"
+	"    VF2: take 512 as UL_DATA buf_cnt\n"
+	"    VF3: take 1024 as UL_DATA buf_cnt\n"
+	"    VF4: absent, take default setting\n");
+
+static uint ul_ctrl_buf_cnt_override[CSM_DP_MAX_NUM_DEVS];
+static unsigned int ul_ctrl_buf_cnt_override_len;
+module_param_array(ul_ctrl_buf_cnt_override, uint, &ul_ctrl_buf_cnt_override_len, 0444);
+MODULE_PARM_DESC(ul_ctrl_buf_cnt_override,
+	"Override UL_CTRL buf_cnt per VF, 0 or absent: no-overriding, other: override.\n"
+	"  Example: 'ul_ctrl_buf_cnt_override=0,512,1024':\n"
+	"    VF1: take default setting\n"
+	"    VF2: take 512 as UL_CTRL buf_cnt\n"
+	"    VF3: take 1024 as UL_CTRL buf_cnt\n"
+	"    VF4: absent, take default setting\n");
+
 /* Platform-specific default profile */
 #if defined(CONFIG_ARM64)
 	/* ARM64: Default to LOW_MEMORY for embedded systems */
@@ -46,6 +68,42 @@ static const struct csm_dp_profile_params csm_dp_profiles[CSM_DP_PROFILE_MAX] =
 
 /* Active profile */
 static enum csm_dp_memory_profile active_profile __read_mostly = CSM_DP_DEFAULT_PROFILE;
+
+static unsigned int csm_dp_get_ul_data_buf_cnt(
+	struct csm_dp_dev *pdev,
+	unsigned int fallback_cnt)
+{
+	/* index of VF in global VF mapping */
+	unsigned int vf_index = pdev - pdev->pdrv->dp_devs;
+
+	/*
+	 * ul_data_buf_cnt only got overriden when user specified particular VF,
+	 * and the overriding number is not 0, otherwise take value of
+	 * fallback_cnt.
+	 */
+	if ((vf_index < ul_data_buf_cnt_override_len) && (ul_data_buf_cnt_override[vf_index] > 0))
+		return ul_data_buf_cnt_override[vf_index];
+
+	return fallback_cnt;
+}
+
+static unsigned int csm_dp_get_ul_ctrl_buf_cnt(
+	struct csm_dp_dev *pdev,
+	unsigned int fallback_cnt)
+{
+	/* index of VF in global VF mapping */
+	unsigned int vf_index = pdev - pdev->pdrv->dp_devs;
+
+	/*
+	 * ul_ctrl_buf_cnt only got overriden when user specified particular VF,
+	 * and the overriding number is not 0, otherwise take value of
+	 * fallback_cnt.
+	 */
+	if ((vf_index < ul_ctrl_buf_cnt_override_len) && (ul_ctrl_buf_cnt_override[vf_index] > 0))
+		return ul_ctrl_buf_cnt_override[vf_index];
+
+	return fallback_cnt;
+}
 
 static struct csm_dp_mhi *get_dp_mhi(struct csm_dp_dev *pdev, enum csm_dp_channel ch)
 {
@@ -202,6 +260,8 @@ free_rxbuf:
 int csm_dp_rx_init(struct csm_dp_dev *pdev)
 {
 	unsigned int type;
+	unsigned int ul_ctrl_buf_count;
+	unsigned int ul_data_buf_count;
 	int ret;
 	const struct csm_dp_profile_params *profile;
 	enum csm_dp_memory_profile current_profile;
@@ -216,11 +276,14 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 	}
 	profile = &csm_dp_profiles[current_profile];
 
-	/* Use profile settings for UL buffer allocation */
+	/* Use profile settings(or overrided value) for UL buffer allocation */
+	ul_ctrl_buf_count = csm_dp_get_ul_ctrl_buf_cnt(pdev, profile->ul_ctrl_buf_count);
+	ul_data_buf_count = csm_dp_get_ul_data_buf_cnt(pdev, profile->ul_data_buf_count);
+
 	pr_info("CSM-DP: using memory profile %s: UL_CTRL=%uKBx%u, UL_DATA=%uKBx%u\n",
 		csm_dp_profile_name(current_profile),
-		profile->ul_ctrl_buf_size / 1024, profile->ul_ctrl_buf_count,
-		profile->ul_data_buf_size / 1024, profile->ul_data_buf_count);
+		profile->ul_ctrl_buf_size / 1024, ul_ctrl_buf_count,
+		profile->ul_data_buf_size / 1024, ul_data_buf_count);
 
 	/* Validate buffer sizes */
 	if (profile->ul_ctrl_buf_size > CSM_DP_MAX_UL_MSG_LEN) {
@@ -239,12 +302,12 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 		return -ENOMEM;
 	}
 
-	/* Allocate UL_CONTROL with profile settings */
+	/* Allocate UL_CONTROL with profile settings(or overrided value) */
 	pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] = csm_dp_mempool_alloc(
 		pdev,
 		CSM_DP_MEM_TYPE_UL_CONTROL,
 		profile->ul_ctrl_buf_size,
-		profile->ul_ctrl_buf_count,
+		ul_ctrl_buf_count,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_CONTROL] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_CONTROL memory pool!\n",
@@ -257,7 +320,7 @@ int csm_dp_rx_init(struct csm_dp_dev *pdev)
 		pdev,
 		CSM_DP_MEM_TYPE_UL_DATA,
 		profile->ul_data_buf_size,
-		profile->ul_data_buf_count,
+		ul_data_buf_count,
 		false); /* no dma map yet since io dev is not ready */
 	if (pdev->mempool[CSM_DP_MEM_TYPE_UL_DATA] == NULL) {
 		CSM_DP_ERROR("%s: failed to allocate UL_DATA memory pool!\n",
