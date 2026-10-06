@@ -448,7 +448,7 @@ int csm_dp_tx(
 int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 {
 	int ret;
-	unsigned int recv_rx_count_per_poll = 0;
+	int recv_rx_count_per_poll = 0;
 	struct csm_dp_buf_cntrl *cur_packet;
 	size_t n = 0, remain = iov_nr;
 
@@ -471,17 +471,14 @@ int csm_dp_rx_poll(struct csm_dp_dev *pdev, struct iovec *iov, size_t iov_nr)
 		return recv_rx_count_per_poll;
 	}
 
-	if (recv_rx_count_per_poll == 0) {
-		atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
-		return 0;
-	}
-
 	/* Only replenish when packets are received from MHI*/
-	ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
-	if (ret < 0)
-		CSM_DP_LIMIT_ERROR(
-			"%s: Error:%d rx replenish for bus:%d VF:%d %s\n",
-			__func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
+	if (recv_rx_count_per_poll > 0) {
+		ret = csm_dp_mhi_rx_replenish(&pdev->mhi_data_dev);
+		if (ret < 0)
+			CSM_DP_LIMIT_ERROR(
+				"%s: Error:%d rx replenish for bus:%d VF:%d %s\n",
+				__func__, ret, pdev->bus_num, pdev->vf_num, ch_name(CSM_DP_CH_DATA));
+	}
 
 	atomic_dec(&pdev->mhi_data_dev.mhi_dev_refcnt);
 
