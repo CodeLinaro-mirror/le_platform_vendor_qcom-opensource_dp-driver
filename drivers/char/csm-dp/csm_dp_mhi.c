@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * ​Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.​
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  */
 
@@ -16,11 +16,6 @@
 #include "csm_dp_mhi.h"
 
 static struct csm_dp_drv *__pdrv;
-
-#define TX_POLL_INTERVAL_NS 500000 /* 0.5ms */
-static uint tx_poll_interval_ns = TX_POLL_INTERVAL_NS;
-module_param(tx_poll_interval_ns, uint, 0644);
-MODULE_PARM_DESC(tx_poll_interval_ns, " Tx poll interval in nanosec, default 500000");
 
 /*
  * Dump a packet.

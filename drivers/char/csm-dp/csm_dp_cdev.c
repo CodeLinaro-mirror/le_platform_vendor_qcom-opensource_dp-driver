@@ -13,6 +13,7 @@
 #include <linux/poll.h>
 #include <linux/dma-mapping.h>
 #include <linux/version.h>
+#include <linux/sched.h>
 
 #include "csm_dp.h"
 
@@ -836,60 +837,7 @@ static void csm_dp_update_pid_name(struct csm_dp_dev *pdev)
 	if (!pdev)
 		return;
 
-#if defined(CONFIG_ARM64)
-	/* Get process name from /proc cmdline as current->comm may be empty */
-	if (current && current->mm && current->mm->arg_start && current->mm->arg_end) {
-		unsigned long len = current->mm->arg_end - current->mm->arg_start;
-		char *cmdline;
-
-		if (len > PAGE_SIZE)
-			len = PAGE_SIZE;
-		if (len == 0)
-			return;
-
-		cmdline = kmalloc(len + 1, GFP_KERNEL);
-		if (cmdline) {
-			int res = access_process_vm(current,
-				current->mm->arg_start, cmdline, len, 0);
-			if (res > 0) {
-				int i;
-				char *basename;
-				/* Ensure not to exceed buffer bounds */
-				if (res > len)
-					res = len;
-
-				/* Find first null or space to get just the command name */
-				for (i = 0; i < res; i++) {
-					if (cmdline[i] == '\0' ||
-							cmdline[i] == '\n' || cmdline[i] == ' ')
-						break;
-				}
-				cmdline[i] = '\0';
-
-				/* Extract basename from the full path */
-				basename = strrchr(cmdline, '/');
-				if (basename && *(basename + 1) != '\0') {
-					/* Copy just the basename */
-					strlcpy(pdev->pid_name, basename + 1, sizeof(pdev->pid_name));
-				} else {
-					/* No path separator, use the whole command */
-					strlcpy(pdev->pid_name, cmdline, sizeof(pdev->pid_name));
-				}
-			}
-			kfree(cmdline);
-		}
-	}
-
-	/* Fallback to current->comm if cmdline didn't work */
-	if (pdev->pid_name[0] == '\0') {
-		if (current->group_leader && current->group_leader->comm[0] != '\0')
-			strlcpy(pdev->pid_name, current->group_leader->comm, sizeof(pdev->pid_name));
-		else
-			strlcpy(pdev->pid_name, current->comm, sizeof(pdev->pid_name));
-	}
-#else
-	snprintf(pdev->pid_name, sizeof(pdev->pid_name), "%s", current->comm);
-#endif
+	get_task_comm(pdev->pid_name, current->group_leader);
 }
 
 static int csm_dp_cdev_open(struct inode *inode, struct file *file)

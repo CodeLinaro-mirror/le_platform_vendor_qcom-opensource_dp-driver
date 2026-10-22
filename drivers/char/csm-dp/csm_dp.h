@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  */
 
@@ -147,7 +147,7 @@ struct csm_dp_dev {
 	struct csm_dp_mhi mhi_data_dev;		/* data path Tx/Rx */
 	bool cdev_inited;
 	pid_t pid;
-	char pid_name[TASK_COMM_LEN+1];
+	char pid_name[TASK_COMM_LEN];
 	unsigned int bus_num;
 	unsigned int vf_num;
 	struct cdev cdev;
